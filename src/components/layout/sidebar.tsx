@@ -52,69 +52,70 @@ export function Sidebar({ projectId }: SidebarProps) {
     : [];
 
   return (
-    <aside className="flex h-full w-64 flex-col border-r bg-card">
-      <div className="flex h-14 items-center border-b px-4">
-        <Link href="/projects" className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-sm">
+    <aside className="flex h-full w-64 flex-col border-r bg-sidebar shadow-sm">
+      <div className="flex h-14 items-center px-6">
+        <Link href="/projects" className="flex items-center gap-2.5">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-xs shadow-md shadow-primary/20">
             H
           </div>
-          <span className="text-lg font-semibold">Hound</span>
+          <span className="text-lg font-bold tracking-tight text-foreground/90">Hound</span>
         </Link>
       </div>
 
-      <nav className="flex-1 space-y-1 p-3">
+      <nav className="flex-1 space-y-1 px-3 py-4">
         {mainNav.map((item) => (
           <Link
             key={item.href}
             href={item.href}
             className={cn(
-              "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+              "flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-all duration-200",
               pathname === item.href
-                ? "bg-accent text-accent-foreground"
-                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                ? "bg-primary/5 text-primary shadow-sm ring-1 ring-primary/10"
+                : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
             )}
           >
-            <item.icon className="h-4 w-4" />
+            <item.icon className={cn("h-4 w-4", pathname === item.href ? "text-primary" : "text-muted-foreground")} />
             {item.label}
           </Link>
         ))}
 
         {projectNav.length > 0 && (
-          <>
-            <div className="my-3 border-t" />
-            <p className="mb-2 px-3 text-xs font-medium uppercase text-muted-foreground">
+          <div className="mt-6">
+            <p className="mb-2 px-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
               Project
             </p>
-            {projectNav.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                  pathname === item.href
-                    ? "bg-accent text-accent-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                )}
-              >
-                <item.icon className="h-4 w-4" />
-                {item.label}
-              </Link>
-            ))}
-          </>
+            <div className="space-y-1">
+              {projectNav.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-all duration-200",
+                    pathname === item.href
+                      ? "bg-primary/5 text-primary shadow-sm ring-1 ring-primary/10"
+                      : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                  )}
+                >
+                  <item.icon className={cn("h-4 w-4", pathname === item.href ? "text-primary" : "text-muted-foreground")} />
+                  {item.label}
+                </Link>
+              ))}
+            </div>
+          </div>
         )}
       </nav>
 
-      <div className="border-t p-3">
+      <div className="mt-auto border-t border-border/50 p-4">
         <Link
           href="/settings"
           className={cn(
-            "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+            "flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-all duration-200",
             pathname === "/settings"
-              ? "bg-accent text-accent-foreground"
-              : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              ? "bg-primary/5 text-primary shadow-sm ring-1 ring-primary/10"
+              : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
           )}
         >
-          <Settings className="h-4 w-4" />
+          <Settings className={cn("h-4 w-4", pathname === "/settings" ? "text-primary" : "text-muted-foreground")} />
           Settings
         </Link>
       </div>

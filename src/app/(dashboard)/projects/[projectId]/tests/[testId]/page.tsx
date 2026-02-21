@@ -501,7 +501,7 @@ export default function TestEditorPage() {
             {/* Pass Rate */}
             <div className="space-y-1">
               <p className="text-xs text-muted-foreground">Pass Rate</p>
-              <div className={`text-2xl font-bold ${getHealthColor(health.passRate)}`}>
+              <div className={`text-3xl font-display font-normal tracking-tight ${getHealthColor(health.passRate)}`}>
                 {health.passRate !== null ? `${health.passRate}%` : "N/A"}
               </div>
               <p className="text-xs text-muted-foreground">
@@ -512,7 +512,7 @@ export default function TestEditorPage() {
             {/* Flakiness */}
             <div className="space-y-1">
               <p className="text-xs text-muted-foreground">Flakiness</p>
-              <div className={`text-2xl font-bold ${getFlakinessColor(health.flakiness)}`}>
+              <div className={`text-3xl font-display font-normal tracking-tight ${getFlakinessColor(health.flakiness)}`}>
                 {health.flakiness !== null ? `${health.flakiness}%` : "N/A"}
               </div>
               <p className="text-xs text-muted-foreground">
@@ -525,7 +525,7 @@ export default function TestEditorPage() {
               <p className="text-xs text-muted-foreground">Trend</p>
               <div className="flex items-center gap-2">
                 {getTrendIcon(health.trend)}
-                <span className="text-2xl font-bold capitalize">{health.trend}</span>
+                <span className="text-3xl font-display font-normal tracking-tight capitalize">{health.trend}</span>
               </div>
               <p className="text-xs text-muted-foreground">
                 Based on recent vs earlier runs
@@ -602,11 +602,11 @@ export default function TestEditorPage() {
                 }
               }}
               autoFocus
-              className="text-2xl font-bold h-auto py-1"
+              className="text-3xl font-display font-normal tracking-tight h-auto py-1"
             />
           ) : (
             <h1
-              className="text-2xl font-bold cursor-pointer hover:text-primary"
+              className="text-3xl font-display font-normal tracking-tight cursor-pointer hover:text-primary"
               onClick={() => setEditingName(true)}
             >
               {test.name}

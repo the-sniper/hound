@@ -168,6 +168,71 @@ function ScreenshotThumbnail({
   );
 }
 
+import { motion, AnimatePresence } from "framer-motion";
+
+// AI Thinking State Component
+function AIThinkingIndicator() {
+  return (
+    <motion.div 
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-primary/5 border border-primary/10 shadow-sm"
+    >
+      <div className="flex gap-1.5">
+        {[0, 1, 2].map((i) => (
+          <motion.div
+            key={i}
+            className="w-2 h-2 rounded-full bg-primary"
+            animate={{
+              scale: [1, 1.3, 1],
+              opacity: [0.4, 1, 0.4],
+            }}
+            transition={{
+              duration: 1.2,
+              repeat: Infinity,
+              delay: i * 0.2,
+              ease: "easeInOut"
+            }}
+          />
+        ))}
+      </div>
+      <span className="text-[10px] font-bold uppercase tracking-widest text-primary/80">AI Analyzing Run</span>
+    </motion.div>
+  );
+}
+
+// Streaming AI Response Component
+function StreamingAIResponse({ response }: { response: string }) {
+  const [displayed, setDisplayed] = useState("");
+  
+  useEffect(() => {
+    let index = 0;
+    const interval = setInterval(() => {
+      if (index < response.length) {
+        setDisplayed(response.slice(0, index + 1));
+        index++;
+      } else {
+        clearInterval(interval);
+      }
+    }, 15);
+    
+    return () => clearInterval(interval);
+  }, [response]);
+  
+  return (
+    <div className="relative">
+      <div className="text-sm leading-relaxed text-foreground/90 font-medium whitespace-pre-wrap">
+        {displayed}
+        <motion.span
+          animate={{ opacity: [1, 0] }}
+          transition={{ repeat: Infinity, duration: 0.8 }}
+          className="inline-block w-1.5 h-4 bg-primary ml-1 align-middle"
+        />
+      </div>
+    </div>
+  );
+}
+
 export default function RunViewerPage() {
   const params = useParams();
   const projectId = params.projectId as string;
@@ -417,29 +482,34 @@ export default function RunViewerPage() {
       </div>
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-4">
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center gap-6">
           <Link href={`/projects/${projectId}/tests/${testId}`}>
-            <Button variant="outline" size="icon">
-              <ChevronLeft className="h-4 w-4" />
+            <Button variant="outline" size="icon" className="rounded-xl h-12 w-12 border-border/50 hover:bg-primary/5 hover:text-primary transition-all">
+              <ChevronLeft className="h-5 w-5" />
             </Button>
           </Link>
           <div>
-            <h1 className="text-2xl font-bold">Test Run</h1>
-            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+            <div className="flex items-center gap-3 mb-1">
+              <h1 className="text-4xl font-display font-normal tracking-tight">Test Run</h1>
+              {run.status === "RUNNING" && <AIThinkingIndicator />}
+            </div>
+            <div className="flex items-center gap-4 text-sm font-medium text-muted-foreground">
               {getStatusBadge(run.status)}
-              <span>•</span>
-              <span>{formatDistanceToNow(run.createdAt)}</span>
+              <div className="flex items-center gap-1.5">
+                <Clock className="h-4 w-4 opacity-50" />
+                <span>{formatDistanceToNow(run.createdAt)}</span>
+              </div>
               {run.duration && (
-                <>
-                  <span>•</span>
+                <div className="flex items-center gap-1.5">
+                  <Activity className="h-4 w-4 opacity-50" />
                   <span>{formatDuration(run.duration)}</span>
-                </>
+                </div>
               )}
             </div>
           </div>
         </div>
-        <Button onClick={loadRun} variant="outline" size="sm">
+        <Button onClick={loadRun} variant="outline" className="rounded-full h-12 px-6 border-border/50 font-semibold hover:bg-primary/5 hover:text-primary transition-all">
           <RefreshCw className="mr-2 h-4 w-4" />
           Refresh
         </Button>
@@ -710,23 +780,29 @@ export default function RunViewerPage() {
 
         {run.failureAnalysis && (
           <TabsContent value="analysis">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Sparkles className="h-5 w-5" />
+            <Card className="border-primary/20 shadow-elegant rounded-[2rem] overflow-hidden">
+              <CardHeader className="bg-primary/5 border-b border-primary/10 p-8">
+                <CardTitle className="flex items-center gap-3 text-2xl font-display font-normal tracking-tight text-primary">
+                  <Sparkles className="h-6 w-6" />
                   AI Failure Analysis
                 </CardTitle>
-                <CardDescription>
-                  AI-powered analysis of test failures
+                <CardDescription className="text-primary/60 font-medium">
+                  Intelligent diagnostics and recommendations for this failure
                 </CardDescription>
               </CardHeader>
-              <CardContent>
-                <div className="prose prose-sm max-w-none">
-                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                    <h4 className="text-amber-800 font-medium mb-2">Analysis</h4>
-                    <div className="text-amber-900 whitespace-pre-wrap">
-                      {run.failureAnalysis}
-                    </div>
+              <CardContent className="p-8">
+                <div className="relative">
+                  <div className="absolute -left-4 top-0 bottom-0 w-1 bg-primary/10 rounded-full" />
+                  <StreamingAIResponse response={run.failureAnalysis} />
+                </div>
+                
+                <div className="mt-10 flex items-center gap-4 p-4 rounded-2xl bg-muted/50 border border-border/50">
+                  <div className="h-10 w-10 rounded-xl bg-background flex items-center justify-center text-primary shadow-sm">
+                    <Activity className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60">Recommendation</p>
+                    <p className="text-sm font-semibold text-foreground/80">Check the element locator in Step 4</p>
                   </div>
                 </div>
               </CardContent>
