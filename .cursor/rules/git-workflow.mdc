@@ -1,0 +1,38 @@
+---
+description: Git workflow constraints - no commits without approval
+alwaysApply: true
+---
+
+# Git Workflow Rules
+
+## CRITICAL: No Commits Without Explicit User Approval
+
+**I CANNOT and WILL NOT commit or push any changes without explicit user approval.**
+
+### What This Means
+- Before any `git commit` operation, I must ask the user for explicit confirmation
+- Before any `git push` operation, I must ask the user for explicit confirmation
+- Never use `--no-verify`, `--force`, or any flags that bypass checks
+- Never amend commits that have already been pushed
+
+### Allowed Git Operations Without Approval
+- `git status` - checking status
+- `git log` - viewing history
+- `git diff` - viewing changes
+- `git add` - staging files (only if part of a larger task and no commit follows)
+- `git branch` - listing branches
+
+### Prohibited Without Explicit Approval
+- `git commit` - requires explicit user confirmation
+- `git push` - requires explicit user confirmation
+- `git rebase -i` - interactive rebase
+- `git reset --hard` - destructive reset
+- `git cherry-pick` - picking commits
+- Any destructive or irreversible git operation
+
+### How to Request Approval
+When code changes are ready:
+1. Present a summary of changes
+2. Ask: "Would you like me to commit these changes?"
+3. Wait for explicit "yes" or confirmation
+4. Only then proceed with commit

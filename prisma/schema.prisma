@@ -18,15 +18,31 @@ model User {
 }
 
 model Project {
-  id          String          @id @default(cuid())
+  id           String          @id @default(cuid())
+  name         String
+  baseUrl      String
+  description  String?
+  members      ProjectMember[]
+  tests        Test[]
+  runs         TestRun[]
+  environments Environment[]
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+}
+
+model Environment {
+  id          String   @id @default(cuid())
   name        String
-  baseUrl     String
   description String?
-  members     ProjectMember[]
-  tests       Test[]
+  isDefault   Boolean  @default(false)
+  variables   String   @default("{}") // JSON string of key-value pairs
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId   String
   runs        TestRun[]
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([projectId, name])
 }
 
 model ProjectMember {
@@ -104,7 +120,6 @@ enum StepType {
 model TestRun {
   id              String       @id @default(cuid())
   status          RunStatus    @default(PENDING)
-  environment     String       @default("production")
   baseUrl         String
   duration        Int?
   results         StepResult[]
@@ -113,6 +128,8 @@ model TestRun {
   testId          String
   project         Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   projectId       String
+  environment     Environment? @relation(fields: [environmentId], references: [id])
+  environmentId   String?
   startedAt       DateTime?
   completedAt     DateTime?
   createdAt       DateTime     @default(now())

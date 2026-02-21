@@ -8,10 +8,54 @@ async function getAIContext(page: Page): Promise<AIAgentContext> {
   // Get accessibility snapshot with type assertion for Playwright
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const accessibilityTree = await (page as any).accessibility?.snapshot?.() ?? {};
+  
+  // Also get simplified HTML structure for form elements
+  const formElements = await page.evaluate(() => {
+    const elements: Array<{
+      tag: string;
+      type?: string;
+      name?: string;
+      id?: string;
+      placeholder?: string;
+      ariaLabel?: string;
+      classes?: string;
+      text?: string;
+    }> = [];
+    
+    // Get interactive elements
+    const inputs = document.querySelectorAll('input, button, textarea, select, [type="submit"], [role="button"], [role="textbox"], [role="input"]');
+    inputs.forEach((el) => {
+      const htmlEl = el as HTMLElement;
+      const isButton = el.tagName.toLowerCase() === 'button' || el.getAttribute('type') === 'submit' || el.getAttribute('role') === 'button';
+      
+      // Get button text more accurately
+      let text = '';
+      if (isButton) {
+        text = (el as HTMLButtonElement).innerText?.trim() || 
+               el.getAttribute('value') || 
+               el.textContent?.trim() || '';
+      }
+      
+      elements.push({
+        tag: el.tagName.toLowerCase(),
+        type: (el as HTMLInputElement).type,
+        name: (el as HTMLInputElement).name,
+        id: el.id,
+        placeholder: (el as HTMLInputElement).placeholder,
+        ariaLabel: el.getAttribute('aria-label') || undefined,
+        classes: el.className,
+        text: text || undefined,
+      });
+    });
+    
+    return elements.slice(0, 50); // Limit to first 50 elements
+  });
+  
   return {
     pageUrl: page.url(),
     pageTitle: await page.title(),
     accessibilityTree: JSON.stringify(accessibilityTree, null, 2),
+    formElements,
   };
 }
 
@@ -46,8 +90,53 @@ export const stepHandlers: Record<string, StepHandler> = {
       ctx?.stepCache?.set(config.target, selector);
     }
 
-    await page.locator(selector).click({ timeout: 10000 });
-    return {};
+    // Try the AI-generated selector first
+    try {
+      await page.locator(selector).click({ timeout: 5000 });
+      return {};
+    } catch (error) {
+      console.log(`AI selector "${selector}" failed, trying fallbacks...`);
+      
+      // Fallback: try common button patterns
+      const fallbackSelectors = [
+        // Try common submit button patterns
+        'button[type="submit"]',
+        'input[type="submit"]',
+        // Try role-based
+        'role=button[name="Sign In"]',
+        'role=button[name="Login"]',
+        'role=button[name="Continue"]',
+        // Try text-based fallbacks - match common button texts
+        'text=/Sign In/i',
+        'text=/Login/i',
+        'text=/Continue/i',
+        'text=/Next/i',
+        'text=/Submit/i',
+      ];
+
+      const triedSelectors: string[] = [selector];
+      
+      for (const fallback of fallbackSelectors) {
+        triedSelectors.push(fallback);
+        try {
+          const count = await page.locator(fallback).count();
+          if (count > 0) {
+            await page.locator(fallback).first().click({ timeout: 3000 });
+            console.log(`Used fallback selector: ${fallback}`);
+            return { logs: [`AI selector "${selector}" failed, used fallback: ${fallback}`] };
+          }
+        } catch (e) {
+          console.log(`Fallback "${fallback}" also failed: ${e}`);
+          continue;
+        }
+      }
+
+      throw new Error(
+        `Could not find clickable element for "${config.target}". ` +
+        `Tried selectors: ${triedSelectors.join(', ')}. ` +
+        `Original error: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
   },
 
   TYPE: async (page, config, ctx) => {

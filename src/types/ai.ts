@@ -28,4 +28,14 @@ export interface AIAgentContext {
     description: string;
     status: string;
   }[];
+  formElements?: Array<{
+    tag: string;
+    type?: string;
+    name?: string;
+    id?: string;
+    placeholder?: string;
+    ariaLabel?: string;
+    classes?: string;
+    text?: string;
+  }>;
 }

@@ -1,0 +1,52 @@
+---
+description: Git commit and push approval requirement
+alwaysApply: true
+---
+
+# Git Commit and Push Approval
+
+## Critical Rule
+
+**NEVER commit or push any changes without explicit user approval.**
+
+## Required Workflow
+
+1. **Before committing:**
+   - Ask the user for explicit approval
+   - Show what files will be committed
+   - Wait for user confirmation
+
+2. **Before pushing:**
+   - Ask the user for explicit approval
+   - Show the commits that will be pushed
+   - Wait for user confirmation
+
+3. **User must explicitly say:**
+   - "yes", "commit", "push", "approved", or similar affirmative
+   - Before any git commit or push command is executed
+
+## Prohibited Actions
+
+- Do NOT run `git commit` without approval
+- Do NOT run `git push` without approval
+- Do NOT use `--no-verify` to bypass hooks without approval
+- Do NOT force push (`--force`, `-f`) without approval
+- Do NOT amend commits (`--amend`) without approval
+
+## Safe Actions (No Approval Required)
+
+- `git status` - Check status
+- `git log` - View history
+- `git diff` - View changes
+- `git add` - Stage files (but still need approval to commit)
+- `git fetch` - Fetch remote changes
+- `git pull` - Pull changes
+- `git branch` - List branches
+- `git stash` - Stash changes
+
+## Approval Checklist
+
+Before running any commit or push:
+- [ ] User has explicitly approved
+- [ ] Files to be committed are shown to user
+- [ ] Commit message is reviewed by user (if provided)

@@ -79,7 +79,13 @@ export async function GET(
     },
   });
 
-  return NextResponse.json(steps);
+  // Parse step configs from JSON string to object
+  const stepsWithParsedConfig = steps.map((step) => ({
+    ...step,
+    config: step.config ? JSON.parse(step.config) : {},
+  }));
+
+  return NextResponse.json(stepsWithParsedConfig);
 }
 
 // Create a new step
@@ -133,7 +139,19 @@ export async function POST(
       },
     });
 
-    return NextResponse.json(step, { status: 201 });
+    // Auto-update test status from DRAFT to ACTIVE when first step is added
+    if (test.status === "DRAFT") {
+      await db.test.update({
+        where: { id: testId },
+        data: { status: "ACTIVE" },
+      });
+    }
+
+    // Return with parsed config
+    return NextResponse.json({
+      ...step,
+      config: data.config,
+    }, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -196,7 +214,13 @@ export async function PUT(
       )
     );
 
-    return NextResponse.json(updatedSteps);
+    // Return with parsed configs
+    const stepsWithParsedConfig = updatedSteps.map((step) => ({
+      ...step,
+      config: step.config ? JSON.parse(step.config) : {},
+    }));
+
+    return NextResponse.json(stepsWithParsedConfig);
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

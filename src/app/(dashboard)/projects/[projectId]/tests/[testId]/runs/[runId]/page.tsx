@@ -33,6 +33,8 @@ import {
   ChevronDown,
   ChevronUp,
   RefreshCw,
+  GitCompare,
+  Eye,
 } from "lucide-react";
 import { formatDistanceToNow, formatDuration } from "@/lib/utils";
 
@@ -65,7 +67,7 @@ interface StepResult {
     orderIndex: number;
     type: string;
     description: string;
-    config: unknown;
+    config: string | unknown;
   };
   createdAt: string;
 }
@@ -81,6 +83,91 @@ interface RunEvent {
   timestamp: number;
 }
 
+interface ComparisonResult {
+  stepId: string;
+  stepIndex: number;
+  stepDescription: string;
+  hasBaseline: boolean;
+  hasCurrent: boolean;
+  baselineScreenshot?: string;
+  currentScreenshot?: string;
+  result?: {
+    matched: boolean;
+    diffPercentage: number;
+    diffPixels: number;
+    totalPixels: number;
+    diffImagePath?: string;
+  };
+  error?: string;
+}
+
+interface ComparisonData {
+  baselineRun: {
+    id: string;
+    status: string;
+    createdAt: string;
+  };
+  currentRun: {
+    id: string;
+    status: string;
+    testName: string;
+    createdAt: string;
+  };
+  summary: {
+    totalCompared: number;
+    matchedCount: number;
+    diffCount: number;
+    averageDiffPercentage: number;
+    hasSignificantChanges: boolean;
+  };
+  comparisons: ComparisonResult[];
+}
+
+interface BaselineRun {
+  id: string;
+  status: string;
+  createdAt: string;
+  _count: { results: number };
+}
+
+// Screenshot thumbnail component with error handling
+function ScreenshotThumbnail({
+  result,
+  isSelected,
+  onClick,
+}: {
+  result: StepResult;
+  isSelected: boolean;
+  onClick: () => void;
+}) {
+  const [hasError, setHasError] = useState(false);
+
+  return (
+    <div
+      className={`p-2 rounded border cursor-pointer transition-colors ${
+        isSelected
+          ? "border-primary bg-primary/5"
+          : "border-gray-200 hover:border-primary/50"
+      }`}
+      onClick={onClick}
+    >
+      <div className="aspect-video bg-gray-100 rounded mb-2 overflow-hidden flex items-center justify-center">
+        {hasError ? (
+          <Camera className="h-6 w-6 text-gray-400" />
+        ) : (
+          <img
+            src={result.screenshotUrl || ""}
+            alt={`Step ${result.step.orderIndex + 1}`}
+            className="w-full h-full object-cover"
+            onError={() => setHasError(true)}
+          />
+        )}
+      </div>
+      <p className="text-xs truncate">Step {result.step.orderIndex + 1}</p>
+    </div>
+  );
+}
+
 export default function RunViewerPage() {
   const params = useParams();
   const projectId = params.projectId as string;
@@ -93,6 +180,13 @@ export default function RunViewerPage() {
   const [selectedStep, setSelectedStep] = useState<StepResult | null>(null);
   const [activeTab, setActiveTab] = useState("timeline");
   const eventSourceRef = useRef<EventSource | null>(null);
+
+  // Comparison state
+  const [comparisonData, setComparisonData] = useState<ComparisonData | null>(null);
+  const [baselineRuns, setBaselineRuns] = useState<BaselineRun[]>([]);
+  const [selectedBaselineRunId, setSelectedBaselineRunId] = useState<string>("");
+  const [comparing, setComparing] = useState(false);
+  const [selectedComparison, setSelectedComparison] = useState<ComparisonResult | null>(null);
 
   useEffect(() => {
     loadRun();
@@ -111,11 +205,17 @@ export default function RunViewerPage() {
       const res = await fetch(`/api/runs/${runId}`);
       if (res.ok) {
         const data = await res.json();
-        setRun(data.run);
-        setResults(data.results);
-        if (data.results.length > 0 && !selectedStep) {
-          setSelectedStep(data.results[0]);
+        console.log("Run data:", data);
+        console.log("Results:", data.results);
+        setRun(data);
+        const resultsArray = data.results || [];
+        setResults(resultsArray);
+        if (resultsArray.length > 0 && !selectedStep) {
+          setSelectedStep(resultsArray[0]);
         }
+      } else {
+        const error = await res.json();
+        console.error("API error:", error);
       }
     } catch (error) {
       console.error("Failed to load run:", error);
@@ -177,6 +277,46 @@ export default function RunViewerPage() {
       console.error("SSE error");
       es.close();
     };
+  }
+
+  async function loadBaselineRuns() {
+    try {
+      const res = await fetch(`/api/runs/${runId}/compare`, { method: "POST" });
+      if (res.ok) {
+        const data = await res.json();
+        setBaselineRuns(data.baselineRuns);
+        if (data.baselineRuns.length > 0 && !selectedBaselineRunId) {
+          setSelectedBaselineRunId(data.baselineRuns[0].id);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to load baseline runs:", error);
+    }
+  }
+
+  async function compareWithBaseline() {
+    if (!selectedBaselineRunId) return;
+
+    setComparing(true);
+    try {
+      const res = await fetch(
+        `/api/runs/${runId}/compare?baselineRunId=${selectedBaselineRunId}`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setComparisonData(data);
+        if (data.comparisons.length > 0) {
+          setSelectedComparison(data.comparisons[0]);
+        }
+      } else {
+        const error = await res.json();
+        alert(error.error || "Failed to compare runs");
+      }
+    } catch (error) {
+      console.error("Comparison failed:", error);
+      alert("Failed to compare runs");
+    }
+    setComparing(false);
   }
 
   function getStatusIcon(status: string) {
@@ -348,6 +488,10 @@ export default function RunViewerPage() {
           <TabsTrigger value="timeline">Step Timeline</TabsTrigger>
           <TabsTrigger value="screenshots">Screenshots</TabsTrigger>
           <TabsTrigger value="logs">Logs</TabsTrigger>
+          <TabsTrigger value="compare" onClick={loadBaselineRuns}>
+            <GitCompare className="h-4 w-4 mr-1" />
+            Compare
+          </TabsTrigger>
           {run.failureAnalysis && (
             <TabsTrigger value="analysis">AI Analysis</TabsTrigger>
           )}
@@ -488,20 +632,12 @@ export default function RunViewerPage() {
                     {results
                       .filter((r) => r.screenshotUrl)
                       .map((result, index) => (
-                        <div
+                        <ScreenshotThumbnail
                           key={result.id}
-                          className={`p-2 rounded border cursor-pointer transition-colors ${
-                            selectedStep?.id === result.id
-                              ? "border-primary bg-primary/5"
-                              : "border-gray-200 hover:border-primary/50"
-                          }`}
+                          result={result}
+                          isSelected={selectedStep?.id === result.id}
                           onClick={() => setSelectedStep(result)}
-                        >
-                          <div className="aspect-video bg-gray-100 rounded mb-2 flex items-center justify-center">
-                            <Camera className="h-6 w-6 text-gray-400" />
-                          </div>
-                          <p className="text-xs truncate">Step {result.step.orderIndex + 1}</p>
-                        </div>
+                        />
                       ))}
                   </div>
                 </ScrollArea>
@@ -597,6 +733,252 @@ export default function RunViewerPage() {
             </Card>
           </TabsContent>
         )}
+
+        <TabsContent value="compare">
+          <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
+            {/* Comparison Controls & Summary */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <GitCompare className="h-5 w-5" />
+                  Compare Runs
+                </CardTitle>
+                <CardDescription>
+                  Compare screenshots with a baseline run
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Baseline Selector */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Baseline Run</label>
+                  <select
+                    value={selectedBaselineRunId}
+                    onChange={(e) => setSelectedBaselineRunId(e.target.value)}
+                    className="w-full p-2 border rounded-md text-sm"
+                  >
+                    <option value="">Select a baseline run...</option>
+                    {baselineRuns.map((run) => (
+                      <option key={run.id} value={run.id}>
+                        Run {run.id.slice(-6)} - {new Date(run.createdAt).toLocaleString()} ({run._count.results} steps)
+                      </option>
+                    ))}
+                  </select>
+                  {baselineRuns.length === 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      No valid baseline runs found. Baseline runs must have passed status and contain screenshots.
+                    </p>
+                  )}
+                </div>
+
+                <Button
+                  onClick={compareWithBaseline}
+                  disabled={!selectedBaselineRunId || comparing}
+                  className="w-full"
+                >
+                  {comparing ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <GitCompare className="mr-2 h-4 w-4" />
+                  )}
+                  {comparing ? "Comparing..." : "Compare"}
+                </Button>
+
+                {/* Summary */}
+                {comparisonData && (
+                  <div className="pt-4 border-t space-y-3">
+                    <h4 className="font-medium">Comparison Summary</h4>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div className="bg-gray-50 p-2 rounded">
+                        <span className="text-muted-foreground">Compared:</span>
+                        <p className="font-medium">{comparisonData.summary.totalCompared}</p>
+                      </div>
+                      <div className="bg-green-50 p-2 rounded">
+                        <span className="text-green-600">Matched:</span>
+                        <p className="font-medium text-green-700">{comparisonData.summary.matchedCount}</p>
+                      </div>
+                      <div className="bg-red-50 p-2 rounded">
+                        <span className="text-red-600">Differences:</span>
+                        <p className="font-medium text-red-700">{comparisonData.summary.diffCount}</p>
+                      </div>
+                      <div className="bg-blue-50 p-2 rounded">
+                        <span className="text-blue-600">Avg Diff:</span>
+                        <p className="font-medium text-blue-700">{comparisonData.summary.averageDiffPercentage.toFixed(2)}%</p>
+                      </div>
+                    </div>
+                    {comparisonData.summary.hasSignificantChanges && (
+                      <div className="bg-amber-50 border border-amber-200 rounded p-2 text-sm text-amber-800">
+                        Significant visual changes detected!
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Step List */}
+                {comparisonData && comparisonData.comparisons.length > 0 && (
+                  <div className="pt-4 border-t">
+                    <h4 className="font-medium mb-2">Step Comparisons</h4>
+                    <ScrollArea className="h-[300px]">
+                      <div className="space-y-1">
+                        {comparisonData.comparisons.map((comp) => (
+                          <div
+                            key={comp.stepId}
+                            onClick={() => setSelectedComparison(comp)}
+                            className={`p-2 rounded cursor-pointer text-sm ${
+                              selectedComparison?.stepId === comp.stepId
+                                ? "bg-primary/10 border border-primary"
+                                : "hover:bg-gray-50 border border-transparent"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="font-medium">Step {comp.stepIndex}</span>
+                              {comp.result ? (
+                                comp.result.matched ? (
+                                  <CheckCircle className="h-4 w-4 text-green-500" />
+                                ) : (
+                                  <XCircle className="h-4 w-4 text-red-500" />
+                                )
+                              ) : comp.error ? (
+                                <AlertCircle className="h-4 w-4 text-amber-500" />
+                              ) : (
+                                <span className="text-xs text-muted-foreground">No baseline</span>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {comp.stepDescription}
+                            </p>
+                            {comp.result && !comp.result.matched && (
+                              <p className="text-xs text-red-600">
+                                {comp.result.diffPercentage.toFixed(2)}% different
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Comparison Viewer */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Screenshot Comparison</CardTitle>
+                {selectedComparison && (
+                  <CardDescription>
+                    Step {selectedComparison.stepIndex}: {selectedComparison.stepDescription}
+                  </CardDescription>
+                )}
+              </CardHeader>
+              <CardContent>
+                {!selectedComparison ? (
+                  <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
+                    <GitCompare className="h-12 w-12 mb-4" />
+                    <p>Select a baseline run and click Compare to start</p>
+                  </div>
+                ) : !selectedComparison.hasBaseline ? (
+                  <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
+                    <Camera className="h-12 w-12 mb-4" />
+                    <p>No baseline screenshot available for this step</p>
+                  </div>
+                ) : selectedComparison.error ? (
+                  <div className="flex flex-col items-center justify-center h-[400px] text-amber-600">
+                    <AlertCircle className="h-12 w-12 mb-4" />
+                    <p>{selectedComparison.error}</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {/* Comparison Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* Baseline */}
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-center">Baseline</p>
+                        {selectedComparison.baselineScreenshot && (
+                          <div className="bg-gray-50 rounded-lg overflow-hidden border">
+                            <img
+                              src={selectedComparison.baselineScreenshot}
+                              alt="Baseline"
+                              className="w-full h-auto"
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Current */}
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-center">Current</p>
+                        {selectedComparison.currentScreenshot && (
+                          <div className="bg-gray-50 rounded-lg overflow-hidden border">
+                            <img
+                              src={selectedComparison.currentScreenshot}
+                              alt="Current"
+                              className="w-full h-auto"
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Diff */}
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-center">
+                          Diff
+                          {selectedComparison.result && (
+                            <span className={`ml-2 text-xs ${
+                              selectedComparison.result.matched ? "text-green-600" : "text-red-600"
+                            }`}>
+                              ({selectedComparison.result.diffPercentage.toFixed(2)}%)
+                            </span>
+                          )}
+                        </p>
+                        {selectedComparison.result?.diffImagePath ? (
+                          <div className="bg-gray-50 rounded-lg overflow-hidden border border-red-200">
+                            <img
+                              src={selectedComparison.result.diffImagePath}
+                              alt="Diff"
+                              className="w-full h-auto"
+                            />
+                          </div>
+                        ) : selectedComparison.result?.matched ? (
+                          <div className="h-32 bg-green-50 rounded-lg border border-green-200 flex items-center justify-center">
+                            <CheckCircle className="h-8 w-8 text-green-500" />
+                          </div>
+                        ) : (
+                          <div className="h-32 bg-gray-50 rounded-lg border flex items-center justify-center text-muted-foreground">
+                            No diff available
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Diff Stats */}
+                    {selectedComparison.result && (
+                      <div className="bg-gray-50 rounded-lg p-4 text-sm">
+                        <div className="grid grid-cols-3 gap-4">
+                          <div>
+                            <p className="text-muted-foreground">Status</p>
+                            <p className={`font-medium ${
+                              selectedComparison.result.matched ? "text-green-600" : "text-red-600"
+                            }`}>
+                              {selectedComparison.result.matched ? "Matched" : "Different"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Diff Pixels</p>
+                            <p className="font-medium">{selectedComparison.result.diffPixels.toLocaleString()}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Total Pixels</p>
+                            <p className="font-medium">{selectedComparison.result.totalPixels.toLocaleString()}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
       </Tabs>
     </DashboardShell>
   );

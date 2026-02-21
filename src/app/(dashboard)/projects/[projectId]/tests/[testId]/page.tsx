@@ -58,6 +58,12 @@ import {
   Loader2,
   History,
   Settings,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  Activity,
+  AlertCircle,
+  BarChart3,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -70,6 +76,7 @@ const STEP_TYPES = [
   { type: "WAIT_FOR_URL", label: "Wait for URL", icon: Clock, category: "Timing" },
   { type: "ASSERT_TEXT", label: "Assert Text", icon: CheckCircle, category: "Assertion" },
   { type: "ASSERT_ELEMENT", label: "Assert Element", icon: Eye, category: "Assertion" },
+  { type: "ASSERT_VISUAL", label: "Assert Visual", icon: Camera, category: "Assertion" },
   { type: "AI_CHECK", label: "AI Check", icon: Sparkles, category: "AI" },
   { type: "AI_EXTRACT", label: "AI Extract", icon: Sparkles, category: "AI" },
   { type: "AI_ACTION", label: "AI Action", icon: Sparkles, category: "AI" },
@@ -89,6 +96,22 @@ interface Step {
   config: Record<string, unknown>;
 }
 
+interface TestRun {
+  id: string;
+  status: string;
+  createdAt: string;
+  duration: number | null;
+}
+
+interface TestHealth {
+  passRate: number | null;
+  flakiness: number | null;
+  trend: "improving" | "stable" | "declining" | "unknown";
+  totalRuns: number;
+  passedRuns: number;
+  failedRuns: number;
+}
+
 interface Test {
   id: string;
   name: string;
@@ -96,6 +119,8 @@ interface Test {
   status: string;
   projectId: string;
   steps: Step[];
+  runs: TestRun[];
+  health: TestHealth;
 }
 
 interface Project {
@@ -151,13 +176,24 @@ export default function TestEditorPage() {
   async function handleSaveSteps() {
     setSaving(true);
     try {
+      // Save all steps (order and any pending changes)
+      const stepsToSave = steps.map((s) => ({
+        id: s.id,
+        orderIndex: s.orderIndex,
+        type: s.type,
+        description: s.description,
+        config: s.config,
+      }));
+      
       const res = await fetch(`/api/tests/${testId}/steps`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(steps),
+        body: JSON.stringify(stepsToSave),
       });
 
       if (res.ok) {
+        const savedSteps = await res.json();
+        setSteps(savedSteps);
         toast.success("Steps saved");
       } else {
         toast.error("Failed to save steps");
@@ -174,7 +210,7 @@ export default function TestEditorPage() {
       const res = await fetch("/api/runs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ testId }),
+        body: JSON.stringify({ testId, projectId }),
       });
 
       if (res.ok) {
@@ -212,16 +248,30 @@ export default function TestEditorPage() {
     }
   }
 
-  function addStep(type: string) {
-    const newStep: Step = {
-      id: `temp-${Date.now()}`,
-      orderIndex: steps.length,
-      type,
-      description: getDefaultDescription(type),
-      config: getDefaultConfig(type),
-    };
-    setSteps([...steps, newStep]);
-    setSelectedStep(newStep);
+  async function addStep(type: string) {
+    const config = getDefaultConfig(type);
+    const description = getDefaultDescription(type);
+    
+    // Create step in database immediately
+    try {
+      const res = await fetch(`/api/tests/${testId}/steps`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type, description, config }),
+      });
+
+      if (res.ok) {
+        const newStep = await res.json();
+        const updatedSteps = [...steps, newStep];
+        setSteps(updatedSteps);
+        setSelectedStep(newStep);
+        toast.success("Step added");
+      } else {
+        toast.error("Failed to add step");
+      }
+    } catch (error) {
+      toast.error("Failed to add step");
+    }
     setShowStepPalette(false);
   }
 
@@ -234,6 +284,7 @@ export default function TestEditorPage() {
       WAIT_FOR_URL: "Wait for URL to change",
       ASSERT_TEXT: "Assert text is present",
       ASSERT_ELEMENT: "Assert element exists",
+      ASSERT_VISUAL: "Assert visual match",
       AI_CHECK: "AI: Verify condition",
       AI_EXTRACT: "AI: Extract information",
       AI_ACTION: "AI: Perform action",
@@ -256,6 +307,7 @@ export default function TestEditorPage() {
       WAIT_FOR_URL: { url: "" },
       ASSERT_TEXT: { text: "", selector: "" },
       ASSERT_ELEMENT: { selector: "", useAI: true },
+      ASSERT_VISUAL: { threshold: 0.8, fullPage: false },
       AI_CHECK: { assertion: "", useVision: false },
       AI_EXTRACT: { query: "", schema: {} },
       AI_ACTION: { instruction: "" },
@@ -269,32 +321,118 @@ export default function TestEditorPage() {
     return configs[type] || {};
   }
 
-  function updateStep(id: string, updates: Partial<Step>) {
-    setSteps(steps.map((s) => (s.id === id ? { ...s, ...updates } : s)));
+  async function updateStep(id: string, updates: Partial<Step>) {
+    // Update local state immediately for UI responsiveness
+    const updatedSteps = steps.map((s) => (s.id === id ? { ...s, ...updates } : s));
+    setSteps(updatedSteps);
+    
     if (selectedStep?.id === id) {
       setSelectedStep({ ...selectedStep, ...updates });
     }
-  }
-
-  function deleteStep(id: string) {
-    setSteps(steps.filter((s) => s.id !== id).map((s, i) => ({ ...s, orderIndex: i })));
-    if (selectedStep?.id === id) {
-      setSelectedStep(null);
+    
+    // Auto-save to database
+    const stepToUpdate = updatedSteps.find((s) => s.id === id);
+    if (stepToUpdate) {
+      try {
+        const res = await fetch(`/api/tests/${testId}/steps`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify([{
+            id: stepToUpdate.id,
+            orderIndex: stepToUpdate.orderIndex,
+            type: stepToUpdate.type,
+            description: stepToUpdate.description,
+            config: stepToUpdate.config,
+          }]),
+        });
+        
+        if (!res.ok) {
+          console.error("Failed to auto-save step");
+        }
+      } catch (error) {
+        console.error("Error auto-saving step:", error);
+      }
     }
   }
 
-  function moveStepUp(index: number) {
+  async function deleteStep(id: string) {
+    try {
+      const res = await fetch(`/api/tests/${testId}/steps?stepId=${id}`, {
+        method: "DELETE",
+      });
+
+      if (res.ok) {
+        setSteps(steps.filter((s) => s.id !== id).map((s, i) => ({ ...s, orderIndex: i })));
+        if (selectedStep?.id === id) {
+          setSelectedStep(null);
+        }
+        toast.success("Step deleted");
+      } else {
+        toast.error("Failed to delete step");
+      }
+    } catch (error) {
+      toast.error("Failed to delete step");
+    }
+  }
+
+  async function moveStepUp(index: number) {
     if (index === 0) return;
     const newSteps = [...steps];
     [newSteps[index - 1], newSteps[index]] = [newSteps[index], newSteps[index - 1]];
-    setSteps(newSteps.map((s, i) => ({ ...s, orderIndex: i })));
+    const reorderedSteps = newSteps.map((s, i) => ({ ...s, orderIndex: i }));
+    setSteps(reorderedSteps);
+    
+    // Save new order to database
+    try {
+      const res = await fetch(`/api/tests/${testId}/steps`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(reorderedSteps.map((s) => ({
+          id: s.id,
+          orderIndex: s.orderIndex,
+          type: s.type,
+          description: s.description,
+          config: s.config,
+        }))),
+      });
+      
+      if (res.ok) {
+        const savedSteps = await res.json();
+        setSteps(savedSteps);
+      }
+    } catch {
+      // Silent fail - UI already updated
+    }
   }
 
-  function moveStepDown(index: number) {
+  async function moveStepDown(index: number) {
     if (index >= steps.length - 1) return;
     const newSteps = [...steps];
     [newSteps[index], newSteps[index + 1]] = [newSteps[index + 1], newSteps[index]];
-    setSteps(newSteps.map((s, i) => ({ ...s, orderIndex: i })));
+    const reorderedSteps = newSteps.map((s, i) => ({ ...s, orderIndex: i }));
+    setSteps(reorderedSteps);
+    
+    // Save new order to database
+    try {
+      const res = await fetch(`/api/tests/${testId}/steps`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(reorderedSteps.map((s) => ({
+          id: s.id,
+          orderIndex: s.orderIndex,
+          type: s.type,
+          description: s.description,
+          config: s.config,
+        }))),
+      });
+      
+      if (res.ok) {
+        const savedSteps = await res.json();
+        setSteps(savedSteps);
+      }
+    } catch {
+      // Silent fail - UI already updated
+    }
   }
 
   function getStepIcon(type: string) {
@@ -308,6 +446,116 @@ export default function TestEditorPage() {
     if (type.includes("ASSERT")) return "bg-green-100 text-green-800 border-green-200";
     if (type === "NAVIGATE") return "bg-blue-100 text-blue-800 border-blue-200";
     return "bg-gray-100 text-gray-800 border-gray-200";
+  }
+
+  function getHealthColor(passRate: number | null): string {
+    if (passRate === null) return "text-gray-400";
+    if (passRate >= 90) return "text-green-600";
+    if (passRate >= 70) return "text-yellow-600";
+    return "text-red-600";
+  }
+
+  function getFlakinessColor(flakiness: number | null): string {
+    if (flakiness === null) return "text-gray-400";
+    if (flakiness === 0) return "text-green-600";
+    if (flakiness <= 30) return "text-yellow-600";
+    return "text-red-600";
+  }
+
+  function getTrendIcon(trend: string) {
+    switch (trend) {
+      case "improving":
+        return <TrendingUp className="h-4 w-4 text-green-600" />;
+      case "declining":
+        return <TrendingDown className="h-4 w-4 text-red-600" />;
+      case "stable":
+        return <Minus className="h-4 w-4 text-blue-600" />;
+      default:
+        return <Activity className="h-4 w-4 text-gray-400" />;
+    }
+  }
+
+  function HealthStats() {
+    if (!test || test.health.totalRuns === 0) {
+      return (
+        <Card className="mb-4">
+          <CardContent className="py-4">
+            <p className="text-sm text-muted-foreground">No runs yet. Run this test to see health metrics.</p>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    const { health } = test;
+
+    return (
+      <Card className="mb-4">
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <BarChart3 className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Test Health (Last 20 Runs)</CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {/* Pass Rate */}
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">Pass Rate</p>
+              <div className={`text-2xl font-bold ${getHealthColor(health.passRate)}`}>
+                {health.passRate !== null ? `${health.passRate}%` : "N/A"}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {health.passedRuns} passed / {health.totalRuns} runs
+              </p>
+            </div>
+
+            {/* Flakiness */}
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">Flakiness</p>
+              <div className={`text-2xl font-bold ${getFlakinessColor(health.flakiness)}`}>
+                {health.flakiness !== null ? `${health.flakiness}%` : "N/A"}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {health.flakiness === 0 ? "Stable" : health.flakiness && health.flakiness > 30 ? "High variability" : "Some variability"}
+              </p>
+            </div>
+
+            {/* Trend */}
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">Trend</p>
+              <div className="flex items-center gap-2">
+                {getTrendIcon(health.trend)}
+                <span className="text-2xl font-bold capitalize">{health.trend}</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Based on recent vs earlier runs
+              </p>
+            </div>
+
+            {/* Recent Runs */}
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">Recent Runs</p>
+              <div className="flex items-center gap-1">
+                {test.runs.slice(0, 5).map((run, i) => (
+                  <div
+                    key={run.id}
+                    className={`w-3 h-3 rounded-full ${
+                      run.status === "PASSED"
+                        ? "bg-green-500"
+                        : run.status === "FAILED" || run.status === "ERROR"
+                        ? "bg-red-500"
+                        : "bg-gray-300"
+                    }`}
+                    title={`Run ${test.runs.length - i}: ${run.status}`}
+                  />
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">Last 5 runs</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
   }
 
   if (loading) {
@@ -390,14 +638,23 @@ export default function TestEditorPage() {
             )}
             Save
           </Button>
-          <Button onClick={handleRunTest} disabled={running || steps.length === 0}>
-            {running ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Play className="mr-2 h-4 w-4" />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div>
+                <Button onClick={handleRunTest} disabled={running || steps.length === 0}>
+                  {running ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Play className="mr-2 h-4 w-4" />
+                  )}
+                  Run Test
+                </Button>
+              </div>
+            </TooltipTrigger>
+            {steps.length === 0 && (
+              <TooltipContent>Add test steps before running</TooltipContent>
             )}
-            Run Test
-          </Button>
+          </Tooltip>
         </div>
       </div>
 
@@ -415,57 +672,60 @@ export default function TestEditorPage() {
         />
       ) : (
         <p
-          className="text-muted-foreground mb-6 cursor-pointer hover:text-foreground"
+          className="text-muted-foreground mb-4 cursor-pointer hover:text-foreground"
           onClick={() => setEditingDescription(true)}
         >
           {test.description || "Click to add description..."}
         </p>
       )}
 
+      {/* Health Stats */}
+      <HealthStats />
+
       {/* Main Editor Layout */}
       <div className="grid gap-4 lg:grid-cols-[300px_1fr_400px]">
         {/* Step Palette */}
-        <Card className="h-[calc(100vh-300px)]">
-          <CardHeader className="pb-3">
+        <Card className="h-[calc(100vh-300px)] flex flex-col">
+          <CardHeader className="pb-3 shrink-0">
             <CardTitle className="text-sm font-medium">Step Palette</CardTitle>
           </CardHeader>
-          <CardContent className="p-0">
-            <ScrollArea className="h-[calc(100%-60px)]">
-              <div className="space-y-1 p-4">
-                {["Basic", "Interaction", "Timing", "Assertion", "AI", "Debug", "Advanced"].map(
-                  (category) => (
-                    <div key={category}>
-                      <p className="text-xs font-medium text-muted-foreground mb-2 px-2">
-                        {category}
-                      </p>
-                      {STEP_TYPES.filter((s) => s.category === category).map((stepType) => (
-                        <Button
-                          key={stepType.type}
-                          variant="ghost"
-                          className="w-full justify-start gap-2 h-auto py-2"
-                          onClick={() => addStep(stepType.type)}
-                        >
-                          <stepType.icon className="h-4 w-4" />
-                          <span className="text-sm">{stepType.label}</span>
-                        </Button>
-                      ))}
-                    </div>
-                  )
-                )}
+          <CardContent className="p-0 flex-1 overflow-hidden">
+            <ScrollArea className="h-full">
+              <div className="space-y-4 p-4">
+              {["Basic", "Interaction", "Timing", "Assertion", "AI", "Debug", "Advanced"].map(
+                (category) => (
+                  <div key={category}>
+                    <p className="text-xs font-medium text-muted-foreground mb-2 px-2">
+                      {category}
+                    </p>
+                    {STEP_TYPES.filter((s) => s.category === category).map((stepType) => (
+                      <Button
+                        key={stepType.type}
+                        variant="ghost"
+                        className="w-full justify-start gap-2 h-auto py-2"
+                        onClick={() => addStep(stepType.type)}
+                      >
+                        <stepType.icon className="h-4 w-4" />
+                        <span className="text-sm">{stepType.label}</span>
+                      </Button>
+                    ))}
+                  </div>
+                )
+              )}
               </div>
             </ScrollArea>
           </CardContent>
         </Card>
 
         {/* Steps List */}
-        <Card className="h-[calc(100vh-300px)]">
-          <CardHeader className="pb-3">
+        <Card className="h-[calc(100vh-300px)] flex flex-col">
+          <CardHeader className="pb-3 shrink-0">
             <CardTitle className="text-sm font-medium">
               Test Steps ({steps.length})
             </CardTitle>
           </CardHeader>
-          <CardContent className="p-0">
-            <ScrollArea className="h-[calc(100%-60px)]">
+          <CardContent className="p-0 flex-1 overflow-hidden">
+            <ScrollArea className="h-full">
               <div className="space-y-2 p-4">
                 {steps.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
@@ -487,43 +747,94 @@ export default function TestEditorPage() {
                         onClick={() => setSelectedStep(step)}
                       >
                         <div className="flex flex-col items-center gap-1 pt-1">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6 opacity-0 group-hover:opacity-100"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  moveStepUp(index);
-                                }}
-                                disabled={index === 0}
-                              >
-                                <ChevronLeft className="h-3 w-3 -rotate-90" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Move up</TooltipContent>
-                          </Tooltip>
-                          <span className="text-xs text-muted-foreground font-medium">
-                            {index + 1}
-                          </span>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6 opacity-0 group-hover:opacity-100"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  moveStepDown(index);
-                                }}
-                                disabled={index >= steps.length - 1}
-                              >
-                                <ChevronLeft className="h-3 w-3 rotate-90" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Move down</TooltipContent>
-                          </Tooltip>
+                          {index === 0 ? (
+                            // First step: show placeholder, step number, move down button
+                            <>
+                              <div className="h-6 w-6" /> {/* Spacer */}
+                              <span className="text-xs text-muted-foreground font-medium">
+                                {index + 1}
+                              </span>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 "
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      moveStepDown(index);
+                                    }}
+                                  >
+                                    <ChevronLeft className="h-3 w-3 -rotate-90" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Move down</TooltipContent>
+                              </Tooltip>
+                            </>
+                          ) : index === steps.length - 1 ? (
+                            // Last step: show move up button, step number, placeholder
+                            <>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 "
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      moveStepUp(index);
+                                    }}
+                                  >
+                                    <ChevronLeft className="h-3 w-3 rotate-90" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Move up</TooltipContent>
+                              </Tooltip>
+                              <span className="text-xs text-muted-foreground font-medium">
+                                {index + 1}
+                              </span>
+                              <div className="h-6 w-6" /> {/* Spacer */}
+                            </>
+                          ) : (
+                            // Middle steps: show both buttons
+                            <>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 "
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      moveStepUp(index);
+                                    }}
+                                  >
+                                    <ChevronLeft className="h-3 w-3 rotate-90" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Move up</TooltipContent>
+                              </Tooltip>
+                              <span className="text-xs text-muted-foreground font-medium">
+                                {index + 1}
+                              </span>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 "
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      moveStepDown(index);
+                                    }}
+                                  >
+                                    <ChevronLeft className="h-3 w-3 -rotate-90" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Move down</TooltipContent>
+                              </Tooltip>
+                            </>
+                          )}
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
@@ -539,7 +850,7 @@ export default function TestEditorPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-6 w-6 opacity-0 group-hover:opacity-100"
+                          className="h-6 w-6 "
                           onClick={(e) => {
                             e.stopPropagation();
                             deleteStep(step.id);
@@ -557,13 +868,13 @@ export default function TestEditorPage() {
         </Card>
 
         {/* Step Configuration */}
-        <Card className="h-[calc(100vh-300px)]">
-          <CardHeader className="pb-3">
+        <Card className="h-[calc(100vh-300px)] flex flex-col">
+          <CardHeader className="pb-3 shrink-0">
             <CardTitle className="text-sm font-medium">
               {selectedStep ? "Step Configuration" : "Select a Step"}
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex-1 overflow-auto">
             {selectedStep ? (
               <StepConfigForm
                 step={selectedStep}
@@ -759,6 +1070,37 @@ function StepConfigForm({
             rows={2}
           />
         </div>
+      )}
+
+      {step.type === "ASSERT_VISUAL" && (
+        <>
+          <div className="space-y-2">
+            <Label>Match Threshold</Label>
+            <Input
+              type="number"
+              min={0}
+              max={1}
+              step={0.05}
+              value={(step.config.threshold as number) ?? 0.8}
+              onChange={(e) => updateConfig("threshold", parseFloat(e.target.value))}
+            />
+            <p className="text-xs text-muted-foreground">
+              0.0 = any match, 1.0 = exact match (default: 0.8)
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id={`fullPage-${step.id}`}
+              checked={(step.config.fullPage as boolean) ?? false}
+              onChange={(e) => updateConfig("fullPage", e.target.checked)}
+              className="rounded border-gray-300"
+            />
+            <Label htmlFor={`fullPage-${step.id}`} className="text-sm font-normal">
+              Full page screenshot
+            </Label>
+          </div>
+        </>
       )}
 
       {step.type === "AI_CHECK" && (

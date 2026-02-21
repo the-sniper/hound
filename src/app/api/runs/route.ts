@@ -8,7 +8,7 @@ const createRunSchema = z.object({
   testId: z.string(),
   projectId: z.string(),
   baseUrl: z.string().optional(),
-  environment: z.string().default("production"),
+  environmentId: z.string().optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -61,12 +61,32 @@ export async function POST(request: Request) {
 
     const baseUrl = data.baseUrl || project.baseUrl;
 
+    // Check test has steps
+    const test = await db.test.findUnique({
+      where: { id: data.testId },
+      include: { steps: { take: 1 } },
+    });
+
+    if (!test) {
+      return NextResponse.json(
+        { error: "Test not found" },
+        { status: 404 }
+      );
+    }
+
+    if (test.steps.length === 0) {
+      return NextResponse.json(
+        { error: "Test has no steps. Add steps before running." },
+        { status: 400 }
+      );
+    }
+
     const run = await db.testRun.create({
       data: {
         testId: data.testId,
         projectId: data.projectId,
         baseUrl,
-        environment: data.environment,
+        environmentId: data.environmentId,
       },
     });
 
@@ -76,6 +96,7 @@ export async function POST(request: Request) {
       testId: data.testId,
       baseUrl,
       projectId: data.projectId,
+      environmentId: data.environmentId,
     }).catch((err) => {
       console.error("Test execution error:", err);
       db.testRun

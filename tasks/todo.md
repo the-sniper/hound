@@ -32,7 +32,7 @@
 
 ## Phase 5: Dashboard & Polish
 - [x] Run history page with filters
-- [ ] Test health indicators (pass rate, flakiness)
-- [ ] Screenshot comparison (visual diff)
-- [ ] Environment/variable management
-- [ ] Bulk test operations
+- [x] Test health indicators (pass rate, flakiness)
+- [x] Screenshot comparison (visual diff)
+- [x] Environment/variable management
+- [x] Bulk test operations

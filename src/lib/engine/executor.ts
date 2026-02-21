@@ -11,10 +11,58 @@ interface ExecutorOptions {
   testId: string;
   baseUrl: string;
   projectId: string;
+  environmentId?: string;
+}
+
+/**
+ * Substitute variables in a string using the format ${variableName}
+ * Variables are looked up from the environment variables and process env
+ */
+export function substituteVariables(
+  value: string,
+  variables: Record<string, string>
+): string {
+  return value.replace(/\$\{(\w+)\}/g, (match, varName) => {
+    // First check environment variables
+    if (variables[varName] !== undefined) {
+      return variables[varName];
+    }
+    // Fall back to process.env
+    if (process.env[varName] !== undefined) {
+      return process.env[varName]!;
+    }
+    // Return original if not found
+    return match;
+  });
+}
+
+/**
+ * Substitute variables in step config object
+ */
+function substituteVariablesInConfig(
+  config: StepConfig,
+  variables: Record<string, string>
+): StepConfig {
+  const substituted: StepConfig = {};
+
+  for (const [key, value] of Object.entries(config)) {
+    if (typeof value === "string") {
+      substituted[key] = substituteVariables(value, variables);
+    } else if (typeof value === "object" && value !== null) {
+      // Recursively substitute in nested objects
+      substituted[key] = JSON.parse(
+        substituteVariables(JSON.stringify(value), variables)
+      );
+    } else {
+      substituted[key] = value;
+    }
+  }
+
+  return substituted;
 }
 
 export async function executeTestRun(options: ExecutorOptions): Promise<void> {
-  const { runId, testId } = options;
+  const { runId, testId, environmentId, baseUrl } = options;
 
   await db.testRun.update({
     where: { id: runId },
@@ -33,6 +81,30 @@ export async function executeTestRun(options: ExecutorOptions): Promise<void> {
     });
     return;
   }
+
+  // Load environment variables
+  let variables: Record<string, string> = {};
+  if (environmentId) {
+    const environment = await db.environment.findUnique({
+      where: { id: environmentId },
+    });
+    if (environment) {
+      try {
+        variables = JSON.parse(environment.variables) as Record<string, string>;
+      } catch {
+        // Invalid JSON, ignore
+      }
+    }
+  }
+
+  // Substitute variables in baseUrl
+  const substitutedBaseUrl = substituteVariables(baseUrl, variables);
+
+  // Update run with environment reference
+  await db.testRun.update({
+    where: { id: runId },
+    data: { environmentId },
+  });
 
   for (const step of test.steps) {
     await db.stepResult.create({
@@ -63,7 +135,21 @@ export async function executeTestRun(options: ExecutorOptions): Promise<void> {
   try {
     for (const step of test.steps) {
       const stepStart = Date.now();
-      const config = step.config as StepConfig;
+      
+      // Parse config from JSON string
+      let config: StepConfig = {};
+      if (step.config) {
+        try {
+          config = typeof step.config === "string" 
+            ? JSON.parse(step.config) 
+            : (step.config as StepConfig);
+        } catch {
+          config = {};
+        }
+      }
+
+      // Apply variable substitution to step config
+      config = substituteVariablesInConfig(config, variables);
 
       runEventBus.emitRunEvent({
         type: "step_start",

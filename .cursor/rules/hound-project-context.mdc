@@ -1,0 +1,71 @@
+---
+description: Hound AI Test Automation Platform context
+alwaysApply: true
+---
+
+# Hound AI Test Automation Platform
+
+## Project Overview
+Hound is an AI-native test automation platform for authoring, running, and managing end-to-end tests using natural language and AI-powered steps.
+
+## Technology Stack
+- **Framework**: Next.js 15 with TypeScript, App Router
+- **Styling**: Tailwind CSS, shadcn/ui components
+- **Database**: Prisma ORM with SQLite (can migrate to PostgreSQL)
+- **Authentication**: NextAuth.js with credentials provider
+- **Browser Automation**: Playwright
+- **AI Layer**: Anthropic Claude API (locator, assertion, failure agents)
+
+## Project Structure
+```
+src/
+  app/           # Next.js App Router
+    (auth)/      # Login, Signup pages
+    (dashboard)/ # Dashboard layout + project pages
+    api/         # API routes (RESTful)
+  components/    # React components (ui/, layout/)
+  lib/           # Core libraries
+    ai/          # AI agents (locator, assertion, failure)
+    engine/      # Test execution engine
+  types/         # TypeScript types
+prisma/          # Database schema and migrations
+```
+
+## Step Types Supported (17 total)
+1. `NAVIGATE` - Navigate to URL
+2. `CLICK` - Click element
+3. `TYPE` - Type text
+4. `WAIT` - Wait for duration
+5. `WAIT_FOR_URL` - Wait for URL change
+6. `ASSERT_TEXT` - Assert text content
+7. `ASSERT_ELEMENT` - Assert element presence
+8. `ASSERT_VISUAL` - Visual regression
+9. `AI_CHECK` - AI-powered assertion
+10. `AI_EXTRACT` - AI-powered data extraction
+11. `AI_ACTION` - AI-powered action
+12. `JAVASCRIPT` - Execute JavaScript
+13. `SCREENSHOT` - Capture screenshot
+14. `HOVER` - Hover over element
+15. `SELECT` - Select dropdown option
+16. `PRESS_KEY` - Press keyboard key
+17. `SCROLL` - Scroll page/element
+
+## Implementation Phases
+- **Phase 1**: Project Foundation (✅)
+- **Phase 2**: Test Authoring (✅)
+- **Phase 3**: Execution Engine (✅)
+- **Phase 4**: AI Agent Layer (✅)
+- **Phase 5**: Dashboard & Polish (Partial - remaining features)
+
+## Phase 5 Remaining Features
+1. **Test health indicators** - Pass rate, flakiness score, stability metrics
+2. **Screenshot comparison** - Visual diff between runs
+3. **Environment/variable management** - Multiple environments (dev/staging/prod)
+4. **Bulk test operations** - Run/delete multiple tests at once
+
+## Key Files
+- `src/lib/engine/executor.ts` - Core test execution orchestrator
+- `src/lib/engine/step-handlers.ts` - Step type implementations
+- `src/lib/ai/` - AI agent implementations
+- `prisma/schema.prisma` - Database schema
+- `context.md` - Detailed project context

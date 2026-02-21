@@ -18,13 +18,21 @@ export async function GET(
     include: {
       test: { select: { id: true, name: true } },
       results: {
-        include: {
+        select: {
+          id: true,
+          status: true,
+          duration: true,
+          screenshotUrl: true,
+          error: true,
+          logs: true,
+          aiResponse: true,
           step: {
             select: {
               id: true,
               orderIndex: true,
               type: true,
               description: true,
+              config: true,
             },
           },
         },

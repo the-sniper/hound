@@ -34,6 +34,9 @@ export async function GET(
           },
         },
       },
+      environments: {
+        orderBy: { createdAt: "asc" },
+      },
       _count: {
         select: { tests: true, runs: true },
       },

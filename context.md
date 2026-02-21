@@ -38,12 +38,12 @@
 - [x] Step caching schema (`StepCache` model in Prisma)
 - [x] AI agents integrated into execution engine
 
-### Phase 5: Dashboard & Polish (Partial)
+### Phase 5: Dashboard & Polish ✅
 - [x] Run history page with status filters
-- [ ] Test health indicators (pass rate, flakiness score)
-- [ ] Screenshot comparison (visual diff)
-- [ ] Environment/variable management
-- [ ] Bulk test operations
+- [x] Test health indicators (pass rate, flakiness score)
+- [x] Screenshot comparison (visual diff)
+- [x] Environment/variable management
+- [x] Bulk test operations
 
 ---
 
