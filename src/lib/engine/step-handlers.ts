@@ -5,7 +5,9 @@ import { checkAssertion } from "@/lib/ai/assertion-agent";
 import type { AIAgentContext } from "@/types/ai";
 
 async function getAIContext(page: Page): Promise<AIAgentContext> {
-  const accessibilityTree = (await page.accessibility.snapshot()) ?? {};
+  // Get accessibility snapshot with type assertion for Playwright
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const accessibilityTree = await (page as any).accessibility?.snapshot?.() ?? {};
   return {
     pageUrl: page.url(),
     pageTitle: await page.title(),

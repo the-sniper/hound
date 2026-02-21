@@ -26,7 +26,7 @@ const stepTypeEnum = z.enum([
 const createStepSchema = z.object({
   type: stepTypeEnum,
   description: z.string().min(1),
-  config: z.record(z.unknown()).default({}),
+  config: z.record(z.string(), z.unknown()).default({}),
 });
 
 const updateStepsSchema = z.array(
@@ -35,7 +35,7 @@ const updateStepsSchema = z.array(
     orderIndex: z.number().int(),
     type: stepTypeEnum,
     description: z.string(),
-    config: z.record(z.unknown()),
+    config: z.record(z.string(), z.unknown()),
   })
 );
 
@@ -125,7 +125,9 @@ export async function POST(
 
     const step = await db.testStep.create({
       data: {
-        ...data,
+        type: data.type,
+        description: data.description,
+        config: JSON.stringify(data.config),
         testId,
         orderIndex,
       },
@@ -188,7 +190,7 @@ export async function PUT(
             orderIndex: step.orderIndex,
             type: step.type,
             description: step.description,
-            config: step.config,
+            config: JSON.stringify(step.config),
           },
         })
       )

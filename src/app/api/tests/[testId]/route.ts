@@ -69,7 +69,7 @@ export async function PUT(
           testId,
           type: step.type as never,
           description: step.description,
-          config: step.config,
+          config: JSON.stringify(step.config),
           orderIndex: step.orderIndex ?? index,
         })),
       });

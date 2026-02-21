@@ -1,6 +1,5 @@
-import type { RunStatus, StepResultStatus } from "@/generated/prisma";
-
-export type { RunStatus, StepResultStatus };
+export type RunStatus = "PENDING" | "RUNNING" | "PASSED" | "FAILED" | "ERROR";
+export type StepResultStatus = "PENDING" | "RUNNING" | "PASSED" | "FAILED" | "SKIPPED";
 
 export interface RunWithResults {
   id: string;

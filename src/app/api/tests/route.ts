@@ -68,7 +68,7 @@ export async function POST(request: Request) {
           create: data.steps.map((step, index) => ({
             type: step.type as never,
             description: step.description,
-            config: step.config,
+            config: JSON.stringify(step.config),
             orderIndex: step.orderIndex ?? index,
           })),
         },

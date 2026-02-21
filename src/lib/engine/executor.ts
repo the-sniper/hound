@@ -167,14 +167,13 @@ export async function executeTestRun(options: ExecutorOptions): Promise<void> {
 
         // Run failure analysis
         try {
+          // Get accessibility snapshot with type assertion for Playwright
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const accessibility = await (page as any).accessibility?.snapshot?.() ?? {};
           const aiContext = {
             pageUrl: page.url(),
             pageTitle: await page.title(),
-            accessibilityTree: JSON.stringify(
-              (await page.accessibility.snapshot()) ?? {},
-              null,
-              2
-            ),
+            accessibilityTree: JSON.stringify(accessibility, null, 2),
             previousSteps,
           };
           const analysis = await analyzeFailure(
