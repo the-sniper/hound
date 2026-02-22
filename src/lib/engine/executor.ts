@@ -174,7 +174,11 @@ export async function executeTestRun(options: ExecutorOptions): Promise<void> {
           throw new Error(`Unknown step type: ${step.type}`);
         }
 
-        const result = await handler(page, config, { stepCache });
+        const result = await handler(page, config, { 
+          stepCache,
+          anthropicKey: run?.user?.anthropicKey,
+          openaiKey: run?.user?.openaiKey,
+        });
 
         let screenshotUrl: string | null = null;
         try {
@@ -266,6 +270,8 @@ export async function executeTestRun(options: ExecutorOptions): Promise<void> {
             pageTitle: await page.title(),
             accessibilityTree: JSON.stringify(accessibility, null, 2),
             previousSteps,
+            anthropicKey: run?.user?.anthropicKey,
+            openaiKey: run?.user?.openaiKey,
           };
           const analysis = await analyzeFailure(
             step.description,

@@ -171,7 +171,7 @@ export const stepHandlers: Record<string, StepHandler> = {
 
     let selector = ctx?.stepCache?.get(config.target);
     if (!selector) {
-      selector = await resolveSelector(page, config.target);
+      selector = await resolveSelector(page, config.target, ctx?.anthropicKey, ctx?.openaiKey);
       ctx?.stepCache?.set(config.target, selector);
     }
 
@@ -226,7 +226,7 @@ export const stepHandlers: Record<string, StepHandler> = {
 
     let selector = ctx?.stepCache?.get(config.target);
     if (!selector) {
-      selector = await resolveSelector(page, config.target);
+      selector = await resolveSelector(page, config.target, ctx?.anthropicKey, ctx?.openaiKey);
       ctx?.stepCache?.set(config.target, selector);
     }
 
@@ -240,7 +240,7 @@ export const stepHandlers: Record<string, StepHandler> = {
 
     let selector = ctx?.stepCache?.get(config.target);
     if (!selector) {
-      selector = await resolveSelector(page, config.target);
+      selector = await resolveSelector(page, config.target, ctx?.anthropicKey, ctx?.openaiKey);
       ctx?.stepCache?.set(config.target, selector);
     }
 
