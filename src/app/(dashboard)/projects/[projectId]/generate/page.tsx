@@ -6,12 +6,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -52,13 +47,17 @@ export default function AIGeneratePage() {
   const router = useRouter();
   const projectId = params.projectId as string;
 
-  const [mode, setMode] = useState<"description" | "url" | "refine">("description");
+  const [mode, setMode] = useState<"description" | "url" | "refine">(
+    "description",
+  );
   const [description, setDescription] = useState("");
   const [url, setUrl] = useState("");
   const [feedback, setFeedback] = useState("");
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [generatedTest, setGeneratedTest] = useState<GeneratedTest | null>(null);
+  const [generatedTest, setGeneratedTest] = useState<GeneratedTest | null>(
+    null,
+  );
   const [editingName, setEditingName] = useState(false);
   const [editingStepIdx, setEditingStepIdx] = useState<number | null>(null);
 
@@ -72,7 +71,7 @@ export default function AIGeneratePage() {
         body.description = description;
       } else if (mode === "url") {
         body.mode = "from_url";
-        body.url = url;
+        body.targetUrl = url;
       } else if (mode === "refine" && generatedTest) {
         body.mode = "refine";
         body.feedback = feedback;
@@ -88,10 +87,12 @@ export default function AIGeneratePage() {
 
       if (res.ok) {
         const data = await res.json();
+        // API returns { tests: [...] } for from_url, { test: {...} } for others
+        const result = data.tests?.[0] || data.test || data;
         setGeneratedTest({
-          name: data.name || data.testName || "Generated Test",
-          description: data.description || description || "",
-          steps: data.steps || [],
+          name: result.name || result.testName || "Generated Test",
+          description: result.description || description || "",
+          steps: result.steps || [],
         });
         if (mode === "refine") {
           setFeedback("");
@@ -184,7 +185,11 @@ export default function AIGeneratePage() {
             onClick={handleSave}
             disabled={saving}
           >
-            {saving ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Save className="mr-2 h-5 w-5" />}
+            {saving ? (
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+            ) : (
+              <Save className="mr-2 h-5 w-5" />
+            )}
             Save Test
           </Button>
         )}
@@ -192,7 +197,11 @@ export default function AIGeneratePage() {
 
       <div className="grid gap-8 lg:grid-cols-[1fr_1fr] px-4">
         {/* Input Panel */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
           <Card className="border-border/40 bg-card/40 backdrop-blur-xl rounded-[2rem] shadow-elegant overflow-hidden">
             <CardHeader className="px-8 pt-8 pb-4">
               <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground/60">
@@ -200,17 +209,31 @@ export default function AIGeneratePage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="px-8 pb-8">
-              <Tabs value={mode} onValueChange={(v) => setMode(v as typeof mode)} className="space-y-6">
+              <Tabs
+                value={mode}
+                onValueChange={(v) => setMode(v as typeof mode)}
+                className="space-y-6"
+              >
                 <TabsList className="grid grid-cols-3 rounded-2xl bg-muted/50 p-1">
-                  <TabsTrigger value="description" className="rounded-xl text-xs font-bold uppercase tracking-wider data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                  <TabsTrigger
+                    value="description"
+                    className="rounded-xl text-xs font-bold uppercase tracking-wider data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                  >
                     <FileText className="mr-1.5 h-3.5 w-3.5" />
                     Describe
                   </TabsTrigger>
-                  <TabsTrigger value="url" className="rounded-xl text-xs font-bold uppercase tracking-wider data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                  <TabsTrigger
+                    value="url"
+                    className="rounded-xl text-xs font-bold uppercase tracking-wider data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                  >
                     <Globe className="mr-1.5 h-3.5 w-3.5" />
                     From URL
                   </TabsTrigger>
-                  <TabsTrigger value="refine" disabled={!generatedTest} className="rounded-xl text-xs font-bold uppercase tracking-wider data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                  <TabsTrigger
+                    value="refine"
+                    disabled={!generatedTest}
+                    className="rounded-xl text-xs font-bold uppercase tracking-wider data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                  >
                     <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
                     Refine
                   </TabsTrigger>
@@ -257,7 +280,8 @@ export default function AIGeneratePage() {
                     />
                   </div>
                   <p className="text-sm text-muted-foreground/60 px-1">
-                    AI will analyze the page structure and generate comprehensive test scenarios
+                    AI will analyze the page structure and generate
+                    comprehensive test scenarios
                   </p>
                   <Button
                     size="lg"
@@ -307,7 +331,11 @@ export default function AIGeneratePage() {
         </motion.div>
 
         {/* Preview Panel */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }}>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.1 }}
+        >
           <Card className="border-border/40 bg-card/40 backdrop-blur-xl rounded-[2rem] shadow-elegant overflow-hidden">
             <CardHeader className="px-8 pt-8 pb-4">
               <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground/60">
@@ -321,9 +349,16 @@ export default function AIGeneratePage() {
                     {editingName ? (
                       <Input
                         value={generatedTest.name}
-                        onChange={(e) => setGeneratedTest({ ...generatedTest, name: e.target.value })}
+                        onChange={(e) =>
+                          setGeneratedTest({
+                            ...generatedTest,
+                            name: e.target.value,
+                          })
+                        }
                         onBlur={() => setEditingName(false)}
-                        onKeyDown={(e) => e.key === "Enter" && setEditingName(false)}
+                        onKeyDown={(e) =>
+                          e.key === "Enter" && setEditingName(false)
+                        }
                         autoFocus
                         className="text-2xl font-display font-bold tracking-tight h-auto py-1 bg-transparent border-none focus-visible:ring-0 px-0"
                       />
@@ -337,7 +372,9 @@ export default function AIGeneratePage() {
                       </h2>
                     )}
                     {generatedTest.description && (
-                      <p className="text-sm text-muted-foreground font-medium">{generatedTest.description}</p>
+                      <p className="text-sm text-muted-foreground font-medium">
+                        {generatedTest.description}
+                      </p>
                     )}
                   </div>
 
@@ -356,15 +393,24 @@ export default function AIGeneratePage() {
                           <span className="text-[10px] font-black text-muted-foreground/30 tabular-nums tracking-widest w-6 text-center">
                             {String(index + 1).padStart(2, "0")}
                           </span>
-                          <Badge variant="outline" className="rounded-lg text-[10px] font-bold uppercase tracking-wider shrink-0 px-2 py-0.5">
+                          <Badge
+                            variant="outline"
+                            className="rounded-lg text-[10px] font-bold uppercase tracking-wider shrink-0 px-2 py-0.5"
+                          >
                             {step.type}
                           </Badge>
                           {editingStepIdx === index ? (
                             <Input
                               value={step.description}
-                              onChange={(e) => updateStep(index, { description: e.target.value })}
+                              onChange={(e) =>
+                                updateStep(index, {
+                                  description: e.target.value,
+                                })
+                              }
                               onBlur={() => setEditingStepIdx(null)}
-                              onKeyDown={(e) => e.key === "Enter" && setEditingStepIdx(null)}
+                              onKeyDown={(e) =>
+                                e.key === "Enter" && setEditingStepIdx(null)
+                              }
                               autoFocus
                               className="flex-1 h-8 text-sm bg-transparent border-none focus-visible:ring-0 px-0"
                             />
@@ -391,7 +437,8 @@ export default function AIGeneratePage() {
 
                   <div className="flex items-center justify-between pt-2">
                     <p className="text-xs text-muted-foreground/50 font-bold">
-                      {generatedTest.steps.length} steps — click to edit, drag to reorder
+                      {generatedTest.steps.length} steps — click to edit, drag
+                      to reorder
                     </p>
                   </div>
                 </div>
@@ -401,9 +448,12 @@ export default function AIGeneratePage() {
                     <Sparkles className="h-12 w-12" />
                   </div>
                   <div>
-                    <p className="font-bold text-lg text-muted-foreground/60">No Test Generated Yet</p>
+                    <p className="font-bold text-lg text-muted-foreground/60">
+                      No Test Generated Yet
+                    </p>
                     <p className="text-sm text-muted-foreground/40 max-w-xs mx-auto mt-1">
-                      Describe your test scenario or provide a URL and let AI create the test steps for you
+                      Describe your test scenario or provide a URL and let AI
+                      create the test steps for you
                     </p>
                   </div>
                 </div>

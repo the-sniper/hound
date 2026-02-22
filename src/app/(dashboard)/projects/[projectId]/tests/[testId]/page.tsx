@@ -147,11 +147,31 @@ const STEP_TYPES = [
   { type: "SAVE_AUTH", label: "Save Auth", icon: KeyRound, category: "Auth" },
   { type: "LOAD_AUTH", label: "Load Auth", icon: KeyRound, category: "Auth" },
   { type: "MOCK_ROUTE", label: "Mock Route", icon: Globe, category: "Mocking" },
-  { type: "REMOVE_MOCK", label: "Remove Mock", icon: Globe, category: "Mocking" },
-  { type: "CONDITIONAL", label: "Conditional", icon: GitBranch, category: "Flow" },
+  {
+    type: "REMOVE_MOCK",
+    label: "Remove Mock",
+    icon: Globe,
+    category: "Mocking",
+  },
+  {
+    type: "CONDITIONAL",
+    label: "Conditional",
+    icon: GitBranch,
+    category: "Flow",
+  },
   { type: "SKIP_IF", label: "Skip If", icon: SkipForward, category: "Flow" },
-  { type: "ASSERT_ACCESSIBLE", label: "Assert Accessible", icon: Accessibility, category: "Quality" },
-  { type: "SECURITY_SCAN", label: "Security Scan", icon: Shield, category: "Quality" },
+  {
+    type: "ASSERT_ACCESSIBLE",
+    label: "Assert Accessible",
+    icon: Accessibility,
+    category: "Quality",
+  },
+  {
+    type: "SECURITY_SCAN",
+    label: "Security Scan",
+    icon: Shield,
+    category: "Quality",
+  },
 ];
 
 interface Step {
@@ -184,6 +204,7 @@ interface Test {
   description: string | null;
   status: string;
   projectId: string;
+  continueOnFailure: boolean;
   steps: Step[];
   runs: TestRun[];
   health: TestHealth;
@@ -222,7 +243,10 @@ export default function TestEditorPage() {
     useState<string>("");
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importCode, setImportCode] = useState("");
-  const [importPreview, setImportPreview] = useState<{ type: string; description: string; config: Record<string, unknown> }[] | null>(null);
+  const [importPreview, setImportPreview] = useState<
+    | { type: string; description: string; config: Record<string, unknown> }[]
+    | null
+  >(null);
   const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState(false);
 
@@ -361,6 +385,31 @@ export default function TestEditorPage() {
     }
   }
 
+  async function handleToggleContinueOnFailure() {
+    if (!test) return;
+    const newValue = !test.continueOnFailure;
+    // Optimistic update
+    setTest({ ...test, continueOnFailure: newValue });
+    try {
+      const res = await fetch(`/api/tests/${testId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ continueOnFailure: newValue }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setTest(updated);
+      } else {
+        // Revert on failure
+        setTest({ ...test, continueOnFailure: !newValue });
+        toast.error("Failed to update setting");
+      }
+    } catch {
+      setTest({ ...test, continueOnFailure: !newValue });
+      toast.error("Failed to update setting");
+    }
+  }
+
   async function addStep(type: string) {
     const config = getDefaultConfig(type);
     const description = getDefaultDescription(type);
@@ -440,12 +489,34 @@ export default function TestEditorPage() {
       JAVASCRIPT: { code: "// JavaScript code\n" },
       SAVE_AUTH: { authStateName: "" },
       LOAD_AUTH: { authStateName: "" },
-      MOCK_ROUTE: { mockUrlPattern: "", mockMethod: "GET", mockStatusCode: 200, mockResponseBody: "", mockHeaders: {} },
+      MOCK_ROUTE: {
+        mockUrlPattern: "",
+        mockMethod: "GET",
+        mockStatusCode: 200,
+        mockResponseBody: "",
+        mockHeaders: {},
+      },
       REMOVE_MOCK: { mockUrlPattern: "" },
-      CONDITIONAL: { conditionType: "element_exists", conditionValue: "", target: "", thenSteps: [], elseSteps: [] },
-      SKIP_IF: { skipConditionType: "element_exists", skipConditionValue: "", target: "" },
-      ASSERT_ACCESSIBLE: { wcagLevel: "AA", a11yImpactThreshold: "serious", failOnA11y: true },
-      SECURITY_SCAN: { scanTypes: ["headers", "cookies", "csrf", "xss", "mixed_content"] },
+      CONDITIONAL: {
+        conditionType: "element_exists",
+        conditionValue: "",
+        target: "",
+        thenSteps: [],
+        elseSteps: [],
+      },
+      SKIP_IF: {
+        skipConditionType: "element_exists",
+        skipConditionValue: "",
+        target: "",
+      },
+      ASSERT_ACCESSIBLE: {
+        wcagLevel: "AA",
+        a11yImpactThreshold: "serious",
+        failOnA11y: true,
+      },
+      SECURITY_SCAN: {
+        scanTypes: ["headers", "cookies", "csrf", "xss", "mixed_content"],
+      },
     };
     return configs[type] || {};
   }
@@ -943,10 +1014,23 @@ export default function TestEditorPage() {
             disabled={exporting || steps.length === 0}
             title="Export as Playwright"
           >
-            {exporting ? <Loader2 className="h-5 w-5 animate-spin" /> : <Download className="h-5 w-5" />}
+            {exporting ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              <Download className="h-5 w-5" />
+            )}
           </Button>
 
-          <Dialog open={importDialogOpen} onOpenChange={(open) => { setImportDialogOpen(open); if (!open) { setImportCode(""); setImportPreview(null); } }}>
+          <Dialog
+            open={importDialogOpen}
+            onOpenChange={(open) => {
+              setImportDialogOpen(open);
+              if (!open) {
+                setImportCode("");
+                setImportPreview(null);
+              }
+            }}
+          >
             <DialogTrigger asChild>
               <Button
                 variant="outline"
@@ -959,7 +1043,9 @@ export default function TestEditorPage() {
             </DialogTrigger>
             <DialogContent className="max-w-2xl rounded-[2rem] border-border/40 bg-card/95 backdrop-blur-xl">
               <DialogHeader>
-                <DialogTitle className="text-xl font-display font-bold">Import Playwright Code</DialogTitle>
+                <DialogTitle className="text-xl font-display font-bold">
+                  Import Playwright Code
+                </DialogTitle>
               </DialogHeader>
               <div className="space-y-4 mt-4">
                 {!importPreview ? (
@@ -976,27 +1062,53 @@ export default function TestEditorPage() {
                       disabled={importing || !importCode.trim()}
                       className="rounded-xl"
                     >
-                      {importing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Eye className="mr-2 h-4 w-4" />}
+                      {importing ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Eye className="mr-2 h-4 w-4" />
+                      )}
                       Preview Steps
                     </Button>
                   </>
                 ) : (
                   <>
                     <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                      <p className="text-sm font-bold text-muted-foreground mb-3">{importPreview.length} steps detected:</p>
+                      <p className="text-sm font-bold text-muted-foreground mb-3">
+                        {importPreview.length} steps detected:
+                      </p>
                       {importPreview.map((s, i) => (
-                        <div key={i} className="flex items-center gap-3 p-3 rounded-xl border border-border/40 bg-background/50">
-                          <Badge variant="outline" className="rounded-lg text-[10px] font-bold uppercase tracking-wider shrink-0">{s.type}</Badge>
-                          <span className="text-sm font-medium truncate">{s.description}</span>
+                        <div
+                          key={i}
+                          className="flex items-center gap-3 p-3 rounded-xl border border-border/40 bg-background/50"
+                        >
+                          <Badge
+                            variant="outline"
+                            className="rounded-lg text-[10px] font-bold uppercase tracking-wider shrink-0"
+                          >
+                            {s.type}
+                          </Badge>
+                          <span className="text-sm font-medium truncate">
+                            {s.description}
+                          </span>
                         </div>
                       ))}
                     </div>
                     <div className="flex gap-3">
-                      <Button variant="outline" onClick={() => setImportPreview(null)} className="rounded-xl">
+                      <Button
+                        variant="outline"
+                        onClick={() => setImportPreview(null)}
+                        className="rounded-xl"
+                      >
                         Back
                       </Button>
-                      <Button onClick={handleImportConfirm} disabled={importing} className="rounded-xl">
-                        {importing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      <Button
+                        onClick={handleImportConfirm}
+                        disabled={importing}
+                        className="rounded-xl"
+                      >
+                        {importing ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : null}
                         Import {importPreview.length} Steps
                       </Button>
                     </div>
@@ -1005,6 +1117,34 @@ export default function TestEditorPage() {
               </div>
             </DialogContent>
           </Dialog>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex items-center gap-2 h-12 rounded-2xl border border-border/40 bg-background/50 px-4 shadow-sm">
+                <Switch
+                  id="continue-on-failure"
+                  checked={test.continueOnFailure}
+                  onCheckedChange={handleToggleContinueOnFailure}
+                  className="data-[state=checked]:bg-primary"
+                />
+                <Label
+                  htmlFor="continue-on-failure"
+                  className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground cursor-pointer whitespace-nowrap"
+                >
+                  Continue on Fail
+                </Label>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent
+              side="bottom"
+              className="rounded-xl p-3 shadow-xl max-w-[220px]"
+            >
+              <p className="text-xs">
+                When enabled, remaining steps will still execute even if a step
+                fails
+              </p>
+            </TooltipContent>
+          </Tooltip>
 
           <Button
             variant="outline"
@@ -1879,7 +2019,9 @@ function StepConfigForm({
               </SelectTrigger>
               <SelectContent className="rounded-xl border-border/40 bg-popover/90 backdrop-blur-xl">
                 {["GET", "POST", "PUT", "DELETE", "PATCH"].map((m) => (
-                  <SelectItem key={m} value={m}>{m}</SelectItem>
+                  <SelectItem key={m} value={m}>
+                    {m}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -1891,7 +2033,9 @@ function StepConfigForm({
             <Input
               type="number"
               value={(step.config.mockStatusCode as number) || 200}
-              onChange={(e) => updateConfig("mockStatusCode", parseInt(e.target.value))}
+              onChange={(e) =>
+                updateConfig("mockStatusCode", parseInt(e.target.value))
+              }
               className="rounded-xl border-border/40 bg-background/50 h-12 px-4 focus-visible:ring-primary/20 w-32"
             />
           </div>
@@ -1914,7 +2058,9 @@ function StepConfigForm({
             <Textarea
               value={JSON.stringify(step.config.mockHeaders || {}, null, 2)}
               onChange={(e) => {
-                try { updateConfig("mockHeaders", JSON.parse(e.target.value)); } catch {}
+                try {
+                  updateConfig("mockHeaders", JSON.parse(e.target.value));
+                } catch {}
               }}
               placeholder='{"Content-Type": "application/json"}'
               rows={3}
@@ -1988,7 +2134,15 @@ function StepConfigForm({
               </Label>
               <Input
                 value={(step.config.thenSteps as number[])?.join(", ") || ""}
-                onChange={(e) => updateConfig("thenSteps", e.target.value.split(",").map((s: string) => parseInt(s.trim())).filter((n: number) => !isNaN(n)))}
+                onChange={(e) =>
+                  updateConfig(
+                    "thenSteps",
+                    e.target.value
+                      .split(",")
+                      .map((s: string) => parseInt(s.trim()))
+                      .filter((n: number) => !isNaN(n)),
+                  )
+                }
                 placeholder="1, 2, 3"
                 className="rounded-xl border-border/40 bg-background/50 h-12 px-4 focus-visible:ring-primary/20"
               />
@@ -1999,7 +2153,15 @@ function StepConfigForm({
               </Label>
               <Input
                 value={(step.config.elseSteps as number[])?.join(", ") || ""}
-                onChange={(e) => updateConfig("elseSteps", e.target.value.split(",").map((s: string) => parseInt(s.trim())).filter((n: number) => !isNaN(n)))}
+                onChange={(e) =>
+                  updateConfig(
+                    "elseSteps",
+                    e.target.value
+                      .split(",")
+                      .map((s: string) => parseInt(s.trim()))
+                      .filter((n: number) => !isNaN(n)),
+                  )
+                }
                 placeholder="4, 5"
                 className="rounded-xl border-border/40 bg-background/50 h-12 px-4 focus-visible:ring-primary/20"
               />
@@ -2015,8 +2177,12 @@ function StepConfigForm({
               Skip Condition Type
             </Label>
             <Select
-              value={(step.config.skipConditionType as string) || "element_exists"}
-              onValueChange={(value) => updateConfig("skipConditionType", value)}
+              value={
+                (step.config.skipConditionType as string) || "element_exists"
+              }
+              onValueChange={(value) =>
+                updateConfig("skipConditionType", value)
+              }
             >
               <SelectTrigger className="rounded-xl border-border/40 bg-background/50 h-12 focus:ring-primary/20">
                 <SelectValue />
@@ -2035,7 +2201,9 @@ function StepConfigForm({
             </Label>
             <Input
               value={(step.config.skipConditionValue as string) || ""}
-              onChange={(e) => updateConfig("skipConditionValue", e.target.value)}
+              onChange={(e) =>
+                updateConfig("skipConditionValue", e.target.value)
+              }
               placeholder="e.g., .cookie-banner or '/login'"
               className="rounded-xl border-border/40 bg-background/50 h-12 px-4 focus-visible:ring-primary/20"
             />
@@ -2080,7 +2248,9 @@ function StepConfigForm({
             </Label>
             <Select
               value={(step.config.a11yImpactThreshold as string) || "serious"}
-              onValueChange={(value) => updateConfig("a11yImpactThreshold", value)}
+              onValueChange={(value) =>
+                updateConfig("a11yImpactThreshold", value)
+              }
             >
               <SelectTrigger className="rounded-xl border-border/40 bg-background/50 h-12 focus:ring-primary/20">
                 <SelectValue />

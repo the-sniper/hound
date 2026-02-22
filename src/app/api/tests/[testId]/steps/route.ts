@@ -21,6 +21,14 @@ const stepTypeEnum = z.enum([
   "SELECT",
   "PRESS_KEY",
   "SCROLL",
+  "SAVE_AUTH",
+  "LOAD_AUTH",
+  "MOCK_ROUTE",
+  "REMOVE_MOCK",
+  "CONDITIONAL",
+  "SKIP_IF",
+  "ASSERT_ACCESSIBLE",
+  "SECURITY_SCAN",
 ]);
 
 const createStepSchema = z.object({

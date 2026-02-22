@@ -3,11 +3,15 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { z } from "zod/v4";
 
+// Transform empty strings to undefined so .optional() works correctly
+const emptyToUndefined = (val: unknown) =>
+  typeof val === "string" && val.trim() === "" ? undefined : val;
+
 const updateSettingsSchema = z.object({
-  name: z.string().optional(),
-  email: z.string().email().optional(),
-  anthropicKey: z.string().optional().nullable(),
-  openaiKey: z.string().optional().nullable(),
+  name: z.preprocess(emptyToUndefined, z.string().optional()),
+  email: z.preprocess(emptyToUndefined, z.string().email().optional()),
+  anthropicKey: z.preprocess(emptyToUndefined, z.string().optional().nullable()),
+  openaiKey: z.preprocess(emptyToUndefined, z.string().optional().nullable()),
 });
 
 export async function GET() {
@@ -82,7 +86,12 @@ export async function PUT(request: NextRequest) {
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: "Invalid input", details: error.issues }, { status: 400 });
+      const firstIssue = error.issues[0];
+      const field = firstIssue?.path?.join(".") || "input";
+      return NextResponse.json(
+        { error: `Invalid ${field}: ${firstIssue?.message || "Invalid input"}`, details: error.issues },
+        { status: 400 }
+      );
     }
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

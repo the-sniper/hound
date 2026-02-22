@@ -151,7 +151,8 @@ export default function SettingsPage() {
         );
         toast.success("Profile updated");
       } else {
-        toast.error("Failed to update profile");
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error || "Failed to update profile");
       }
     } catch (error) {
       toast.error("Failed to update profile");
@@ -180,7 +181,8 @@ export default function SettingsPage() {
         loadSettings(); // Reload to get masked keys and status
         setKeyFormData((prev) => ({ ...prev, [field]: "" }));
       } else {
-        toast.error("Failed to update API key");
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error || "Failed to update API key");
       }
     } catch (error) {
       toast.error("Failed to update API key");
@@ -751,29 +753,40 @@ export default function SettingsPage() {
                   <div className="flex items-center gap-4 p-4 rounded-2xl bg-primary/5 border border-primary/10">
                     <Zap className="h-6 w-6 text-primary" />
                     <div>
-                      <p className="text-xs font-bold uppercase tracking-wider text-primary/80">Current Plan</p>
-                      <p className="text-2xl font-display font-bold capitalize">{usage.tier}</p>
+                      <p className="text-xs font-bold uppercase tracking-wider text-primary/80">
+                        Current Plan
+                      </p>
+                      <p className="text-2xl font-display font-bold capitalize">
+                        {usage.tier}
+                      </p>
                     </div>
                   </div>
 
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-bold text-muted-foreground/60">Runs This Month</span>
+                      <span className="text-sm font-bold text-muted-foreground/60">
+                        Runs This Month
+                      </span>
                       <span className="text-sm font-bold">
-                        {usage.runsThisMonth} / {usage.runLimit === -1 ? "Unlimited" : usage.runLimit}
+                        {usage.runsThisMonth} /{" "}
+                        {usage.runLimit === -1 ? "Unlimited" : usage.runLimit}
                       </span>
                     </div>
                     {usage.runLimit !== -1 && (
                       <Progress
-                        value={Math.min((usage.runsThisMonth / usage.runLimit) * 100, 100)}
+                        value={Math.min(
+                          (usage.runsThisMonth / usage.runLimit) * 100,
+                          100,
+                        )}
                         className="h-2 rounded-full"
                       />
                     )}
-                    {usage.runLimit !== -1 && usage.runsThisMonth / usage.runLimit > 0.8 && (
-                      <p className="text-xs text-amber-600 font-bold">
-                        You&apos;re approaching your monthly run limit
-                      </p>
-                    )}
+                    {usage.runLimit !== -1 &&
+                      usage.runsThisMonth / usage.runLimit > 0.8 && (
+                        <p className="text-xs text-amber-600 font-bold">
+                          You&apos;re approaching your monthly run limit
+                        </p>
+                      )}
                   </div>
 
                   <Separator className="bg-border/20" />
@@ -782,21 +795,29 @@ export default function SettingsPage() {
                     <div className="flex items-center gap-3 p-3 rounded-xl bg-background/50">
                       <FolderKanban className="h-4 w-4 text-muted-foreground/50" />
                       <div>
-                        <p className="text-xs text-muted-foreground/50 font-bold">Projects</p>
-                        <p className="text-lg font-bold">{usage.projectsCount}</p>
+                        <p className="text-xs text-muted-foreground/50 font-bold">
+                          Projects
+                        </p>
+                        <p className="text-lg font-bold">
+                          {usage.projectsCount}
+                        </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3 p-3 rounded-xl bg-background/50">
                       <FlaskConical className="h-4 w-4 text-muted-foreground/50" />
                       <div>
-                        <p className="text-xs text-muted-foreground/50 font-bold">Tests</p>
+                        <p className="text-xs text-muted-foreground/50 font-bold">
+                          Tests
+                        </p>
                         <p className="text-lg font-bold">{usage.testsCount}</p>
                       </div>
                     </div>
                   </div>
                 </>
               ) : (
-                <p className="text-sm text-muted-foreground text-center py-6">Loading usage data...</p>
+                <p className="text-sm text-muted-foreground text-center py-6">
+                  Loading usage data...
+                </p>
               )}
             </CardContent>
           </Card>

@@ -8,6 +8,7 @@ const updateTestSchema = z.object({
   name: z.string().min(1).optional(),
   description: z.string().optional(),
   status: z.enum(["DRAFT", "ACTIVE", "PAUSED", "ARCHIVED"]).optional(),
+  continueOnFailure: z.boolean().optional(),
   steps: z
     .array(
       z.object({
@@ -178,6 +179,9 @@ export async function PUT(
           description: data.description,
         }),
         ...(data.status && { status: data.status }),
+        ...(data.continueOnFailure !== undefined && {
+          continueOnFailure: data.continueOnFailure,
+        }),
       },
       include: { steps: { orderBy: { orderIndex: "asc" } } },
     });

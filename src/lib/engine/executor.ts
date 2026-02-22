@@ -274,10 +274,10 @@ export async function executeTestRun(options: ExecutorOptions): Promise<void> {
             screenshotUrl,
             cacheHit: cacheHits.get(step.id) ?? false,
             aiResponse: result.aiResponse
-              ? JSON.parse(JSON.stringify(result.aiResponse))
+              ? JSON.stringify(result.aiResponse)
               : undefined,
-            logs: result.logs
-              ? JSON.parse(JSON.stringify(result.logs))
+            logs: result.logs?.length
+              ? result.logs.join("\n")
               : undefined,
           },
         });
@@ -363,8 +363,8 @@ export async function executeTestRun(options: ExecutorOptions): Promise<void> {
                 screenshotUrl: retryScreenshot,
                 retryCount,
                 cacheHit: cacheHits.get(step.id) ?? false,
-                aiResponse: retryResult.aiResponse ? JSON.parse(JSON.stringify(retryResult.aiResponse)) : undefined,
-                logs: retryResult.logs ? JSON.parse(JSON.stringify(retryResult.logs)) : undefined,
+                aiResponse: retryResult.aiResponse ? JSON.stringify(retryResult.aiResponse) : undefined,
+                logs: retryResult.logs?.length ? retryResult.logs.join("\n") : undefined,
               },
             });
 
