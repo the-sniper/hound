@@ -19,6 +19,19 @@ export interface StepConfig {
   amount?: number;
   optionValue?: string;
   authStateName?: string;
+  mockUrlPattern?: string;
+  mockMethod?: string;
+  mockStatusCode?: number;
+  mockResponseBody?: string;
+  mockHeaders?: Record<string, string>;
+  condition?: string;
+  conditionType?: "element_exists" | "text_contains" | "url_matches" | "variable_equals";
+  conditionValue?: string;
+  thenSteps?: number[];
+  elseSteps?: number[];
+  skipCondition?: string;
+  skipConditionType?: "element_exists" | "text_contains" | "url_matches" | "variable_equals";
+  skipConditionValue?: string;
 }
 
 export interface TestWithSteps {
@@ -62,6 +75,10 @@ export const STEP_TYPE_LABELS: Record<StepType, string> = {
   SCROLL: "Scroll",
   SAVE_AUTH: "Save Auth",
   LOAD_AUTH: "Load Auth",
+  MOCK_ROUTE: "Mock Route",
+  REMOVE_MOCK: "Remove Mock",
+  CONDITIONAL: "Conditional",
+  SKIP_IF: "Skip If",
 };
 
 export const STEP_TYPE_CATEGORIES = {
@@ -78,4 +95,6 @@ export const STEP_TYPE_CATEGORIES = {
   ai: ["AI_CHECK", "AI_EXTRACT", "AI_ACTION"] as StepType[],
   advanced: ["JAVASCRIPT", "SCREENSHOT"] as StepType[],
   auth: ["SAVE_AUTH", "LOAD_AUTH"] as StepType[],
+  mocking: ["MOCK_ROUTE", "REMOVE_MOCK"] as StepType[],
+  flow: ["CONDITIONAL", "SKIP_IF"] as StepType[],
 };

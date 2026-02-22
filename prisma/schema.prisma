@@ -125,6 +125,10 @@ enum StepType {
   SCROLL
   SAVE_AUTH
   LOAD_AUTH
+  MOCK_ROUTE
+  REMOVE_MOCK
+  CONDITIONAL
+  SKIP_IF
 }
 
 model TestRun {

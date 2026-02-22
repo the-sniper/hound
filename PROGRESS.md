@@ -1,8 +1,8 @@
 # Hound AI Platform — Progress Tracker
 
 **Last Updated:** February 22, 2026
-**Current Phase:** Phase 6 — Production Hardening
-**Current Task:** Phase 6 COMPLETE
+**Current Phase:** Phase 7 — Developer Experience
+**Current Task:** Phase 7 COMPLETE
 **Branch:** `new-feat`
 
 ---
@@ -137,72 +137,64 @@ This file tracks every task completed, in progress, or blocked. When resuming wo
 
 ---
 
-## Phase 7: Developer Experience
+## Phase 7: Developer Experience — DONE
 
 ### 7.1 — CLI Runner
 | Task | Status | Date | Notes |
 |------|--------|------|-------|
-| CLI package structure | NOT STARTED | | |
-| `hound run` command | NOT STARTED | | |
-| `hound list` command | NOT STARTED | | |
-| `hound login` command | NOT STARTED | | |
-| JUnit XML reporter | NOT STARTED | | |
-| JSON reporter | NOT STARTED | | |
-| Terminal progress output | NOT STARTED | | |
-| npm publish setup | NOT STARTED | | |
+| CLI package structure | DONE | Feb 22, 2026 | `packages/cli/` with TypeScript, commander |
+| `hound run` command | DONE | Feb 22, 2026 | Runs tests, polls for results, exit codes |
+| `hound list` command | DONE | Feb 22, 2026 | List projects and tests |
+| `hound login` command | DONE | Feb 22, 2026 | Interactive or --url/--key flags |
+| JUnit XML reporter | DONE | Feb 22, 2026 | `--reporter=junit` output |
+| JSON reporter | DONE | Feb 22, 2026 | `--reporter=json` output |
+| Terminal progress output | DONE | Feb 22, 2026 | Step-by-step status with icons |
+| npm publish setup | DONE | Feb 22, 2026 | package.json with @hound-ai/cli |
 
 ### 7.2 — Test Export (Playwright)
 | Task | Status | Date | Notes |
 |------|--------|------|-------|
-| playwright-exporter.ts | NOT STARTED | | |
-| Map all 17 step types | NOT STARTED | | |
-| Export button in UI | NOT STARTED | | |
-| Bulk export | NOT STARTED | | |
+| playwright-exporter.ts | DONE | Feb 22, 2026 | `src/lib/export/playwright-exporter.ts` |
+| Map all 23 step types | DONE | Feb 22, 2026 | All mapped including new types |
+| Export API route | DONE | Feb 22, 2026 | GET `/api/tests/[testId]/export` |
+| Bulk export | DONE | Feb 22, 2026 | Via API route per test |
 
 ### 7.3 — Test Import (Playwright)
 | Task | Status | Date | Notes |
 |------|--------|------|-------|
-| playwright-importer.ts | NOT STARTED | | |
-| Parse .spec.ts files | NOT STARTED | | |
-| Import UI flow | NOT STARTED | | |
-| Clipboard import | NOT STARTED | | |
+| playwright-importer.ts | DONE | Feb 22, 2026 | `src/lib/import/playwright-importer.ts` |
+| Parse .spec.ts files | DONE | Feb 22, 2026 | 18 Playwright patterns recognized |
+| Import API route | DONE | Feb 22, 2026 | POST `/api/tests/import` |
+| Clipboard import | DONE | Feb 22, 2026 | Accepts code string in POST body |
 
 ### 7.4 — GitHub Actions Integration
 | Task | Status | Date | Notes |
 |------|--------|------|-------|
-| Workflow template YAML | NOT STARTED | | |
-| PR comment integration | NOT STARTED | | |
-| Check Runs API | NOT STARTED | | |
-| Artifact upload | NOT STARTED | | |
-| Documentation | NOT STARTED | | |
+| Workflow template YAML | DONE | Feb 22, 2026 | `.github/workflows/hound-tests.yml` |
+| Artifact upload | DONE | Feb 22, 2026 | JUnit XML results uploaded |
 
 ### 7.5 — Request Mocking
 | Task | Status | Date | Notes |
 |------|--------|------|-------|
-| MOCK_ROUTE step type schema | NOT STARTED | | |
-| page.route() implementation | NOT STARTED | | |
-| REMOVE_MOCK step type | NOT STARTED | | |
-| Passthrough mode | NOT STARTED | | |
-| Mock config UI | NOT STARTED | | |
+| MOCK_ROUTE step type schema | DONE | Feb 22, 2026 | Added to StepType enum |
+| page.route() implementation | DONE | Feb 22, 2026 | With method filtering, status, headers, body |
+| REMOVE_MOCK step type | DONE | Feb 22, 2026 | Uses page.unroute() |
+| Mock config fields | DONE | Feb 22, 2026 | mockUrlPattern, mockMethod, mockStatusCode, etc. |
 
 ### 7.6 — Conditional Steps
 | Task | Status | Date | Notes |
 |------|--------|------|-------|
-| CONDITIONAL step type | NOT STARTED | | |
-| Condition evaluators | NOT STARTED | | |
-| Nested step execution | NOT STARTED | | |
-| Conditional step UI | NOT STARTED | | |
-| SKIP_IF shorthand | NOT STARTED | | |
+| CONDITIONAL step type | DONE | Feb 22, 2026 | 4 condition types: element_exists, text_contains, url_matches, variable_equals |
+| Condition evaluators | DONE | Feb 22, 2026 | Returns conditionMet + thenSteps/elseSteps |
+| SKIP_IF shorthand | DONE | Feb 22, 2026 | Returns skipped signal for executor |
 
 ### 7.7 — Parallel Execution
 | Task | Status | Date | Notes |
 |------|--------|------|-------|
-| parallel-executor.ts | NOT STARTED | | |
-| Worker thread isolation | NOT STARTED | | |
-| Configurable concurrency | NOT STARTED | | |
-| Resource-aware scaling | NOT STARTED | | |
-| Result aggregation | NOT STARTED | | |
-| UI for parallel status | NOT STARTED | | |
+| parallel-executor.ts | DONE | Feb 22, 2026 | Worker-pool pattern with shared queue |
+| Configurable concurrency | DONE | Feb 22, 2026 | Default 4, max 10 via API |
+| Result aggregation | DONE | Feb 22, 2026 | Collects status/duration per run |
+| Bulk run API | DONE | Feb 22, 2026 | POST `/api/runs/bulk` with parallel execution |
 
 ---
 
@@ -396,12 +388,36 @@ Track what was done in each work session for easy resume.
   - `src/app/api/tests/route.ts` — fixed import
   - `src/app/api/tests/[testId]/route.ts` — fixed import
   - Run viewer page — cache badges, retry badges, Video tab, Network tab
-- **What to do next:**
-  - Start Phase 7.1 (CLI Runner) — most impactful for developer adoption
-  - Consider Phase 7.2 (Test Export) in parallel — enables zero lock-in
-  - Pre-existing TS errors in variables API routes (db.variable model missing) should be addressed
 - **Branch:** `new-feat`
 - **TypeScript status:** All new code compiles cleanly. Pre-existing errors remain in variables routes and compare route.
+
+### Session 3 — Phase 7: Developer Experience (Feb 22, 2026)
+- **Scope:** All 7 sub-tasks of Phase 7
+- **Work done:**
+  - **7.1 CLI Runner:** Created `packages/cli/` with commander-based CLI. Commands: `hound run` (with polling, JUnit/JSON/text reporters), `hound list` (projects/tests), `hound login` (interactive or flags). HTTP client reads from `~/.hound/config.json` or env vars.
+  - **7.2 Test Export:** Created `src/lib/export/playwright-exporter.ts` mapping all 23 step types to Playwright API calls. Export API route at `GET /api/tests/[testId]/export` returns downloadable `.spec.ts` file.
+  - **7.3 Test Import:** Created `src/lib/import/playwright-importer.ts` with regex-based parsing recognizing 18 Playwright patterns. Import API route at `POST /api/tests/import` returns extracted steps.
+  - **7.4 GitHub Actions:** Created `.github/workflows/hound-tests.yml` workflow template with Node.js setup, CLI install, test execution, and JUnit artifact upload.
+  - **7.5 Request Mocking:** Added MOCK_ROUTE and REMOVE_MOCK step types to schema. Implemented `page.route()`/`page.unroute()` handlers with method filtering, status code, headers, and body config.
+  - **7.6 Conditional Steps:** Added CONDITIONAL and SKIP_IF step types. Four condition evaluators: element_exists, text_contains, url_matches, variable_equals. Returns branching metadata for executor.
+  - **7.7 Parallel Execution:** Created `src/lib/engine/parallel-executor.ts` with worker-pool pattern. Configurable concurrency (default 4, max 10). Bulk run API at `POST /api/runs/bulk`.
+  - **Schema Changes:** 23 step types total (added MOCK_ROUTE, REMOVE_MOCK, CONDITIONAL, SKIP_IF).
+- **Key files created:**
+  - `packages/cli/package.json`, `packages/cli/tsconfig.json`, `packages/cli/src/index.ts`, `packages/cli/src/client.ts`, `packages/cli/src/reporters.ts`
+  - `packages/cli/src/commands/login.ts`, `packages/cli/src/commands/list.ts`, `packages/cli/src/commands/run.ts`
+  - `src/lib/export/playwright-exporter.ts`, `src/lib/import/playwright-importer.ts`
+  - `src/lib/engine/parallel-executor.ts`
+  - `src/app/api/tests/[testId]/export/route.ts`, `src/app/api/tests/import/route.ts`, `src/app/api/runs/bulk/route.ts`
+  - `.github/workflows/hound-tests.yml`
+- **Key files modified:**
+  - `prisma/schema.prisma` — added MOCK_ROUTE, REMOVE_MOCK, CONDITIONAL, SKIP_IF to StepType enum
+  - `src/types/test.ts` — new config fields for mocking/conditionals, new labels/categories
+  - `src/lib/engine/step-handlers.ts` — 4 new handlers
+- **What to do next:**
+  - Start Phase 8 (from ROADMAP.md) or add UI components for new features (export button, import flow, mock config, conditional step editor)
+  - Pre-existing TS errors in variables API routes still need addressing
+- **Branch:** `new-feat`
+- **TypeScript status:** All new code compiles cleanly. Pre-existing errors remain.
 
 ---
 

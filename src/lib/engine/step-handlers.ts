@@ -363,4 +363,115 @@ export const stepHandlers: Record<string, StepHandler> = {
 
     return { logs: [`Auth state "${name}" loaded`] };
   },
+
+  MOCK_ROUTE: async (page, config) => {
+    const pattern = config.mockUrlPattern;
+    if (!pattern) throw new Error("URL pattern is required for mock route");
+
+    const statusCode = config.mockStatusCode ?? 200;
+    const body = config.mockResponseBody ?? "";
+    const headers = config.mockHeaders ?? {};
+
+    await page.route(pattern, (route) => {
+      if (config.mockMethod && route.request().method() !== config.mockMethod.toUpperCase()) {
+        return route.fallback();
+      }
+      return route.fulfill({
+        status: statusCode,
+        contentType: headers["content-type"] || "application/json",
+        headers,
+        body,
+      });
+    });
+
+    return { logs: [`Route mocked: ${pattern} → ${statusCode}`] };
+  },
+
+  REMOVE_MOCK: async (page, config) => {
+    const pattern = config.mockUrlPattern;
+    if (!pattern) throw new Error("URL pattern is required to remove mock");
+
+    await page.unroute(pattern);
+    return { logs: [`Mock removed: ${pattern}`] };
+  },
+
+  CONDITIONAL: async (page, config) => {
+    const conditionType = config.conditionType;
+    const conditionValue = config.conditionValue ?? "";
+    let conditionMet = false;
+
+    switch (conditionType) {
+      case "element_exists": {
+        const target = config.condition ?? "";
+        const count = await page.locator(target).count();
+        conditionMet = count > 0;
+        break;
+      }
+      case "text_contains": {
+        const bodyText = (await page.textContent("body")) ?? "";
+        conditionMet = bodyText.includes(conditionValue);
+        break;
+      }
+      case "url_matches": {
+        const currentUrl = page.url();
+        conditionMet = new RegExp(conditionValue).test(currentUrl);
+        break;
+      }
+      case "variable_equals": {
+        const varName = config.condition ?? "";
+        const envValue = process.env[varName] ?? "";
+        conditionMet = envValue === conditionValue;
+        break;
+      }
+      default:
+        throw new Error(`Unknown condition type: ${conditionType}`);
+    }
+
+    return {
+      logs: [`Condition "${conditionType}" evaluated to ${conditionMet}`],
+      aiResponse: { conditionMet, thenSteps: config.thenSteps, elseSteps: config.elseSteps },
+    };
+  },
+
+  SKIP_IF: async (page, config) => {
+    const conditionType = config.skipConditionType;
+    const conditionValue = config.skipConditionValue ?? "";
+    let shouldSkip = false;
+
+    switch (conditionType) {
+      case "element_exists": {
+        const target = config.skipCondition ?? "";
+        const count = await page.locator(target).count();
+        shouldSkip = count > 0;
+        break;
+      }
+      case "text_contains": {
+        const bodyText = (await page.textContent("body")) ?? "";
+        shouldSkip = bodyText.includes(conditionValue);
+        break;
+      }
+      case "url_matches": {
+        const currentUrl = page.url();
+        shouldSkip = new RegExp(conditionValue).test(currentUrl);
+        break;
+      }
+      case "variable_equals": {
+        const varName = config.skipCondition ?? "";
+        const envValue = process.env[varName] ?? "";
+        shouldSkip = envValue === conditionValue;
+        break;
+      }
+      default:
+        throw new Error(`Unknown condition type: ${conditionType}`);
+    }
+
+    if (shouldSkip) {
+      return {
+        logs: [`Step skipped: condition "${conditionType}" was true`],
+        aiResponse: { skipped: true },
+      };
+    }
+
+    return { logs: [`Step not skipped: condition "${conditionType}" was false`] };
+  },
 };
