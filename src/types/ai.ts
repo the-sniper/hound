@@ -38,4 +38,6 @@ export interface AIAgentContext {
     classes?: string;
     text?: string;
   }>;
+  anthropicKey?: string | null;
+  openaiKey?: string | null;
 }

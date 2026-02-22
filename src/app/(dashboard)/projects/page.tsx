@@ -20,7 +20,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, FlaskConical, Play, FolderKanban, ChevronRight } from "lucide-react";
+import {
+  Plus,
+  FlaskConical,
+  Play,
+  FolderKanban,
+  ChevronRight,
+} from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -86,56 +92,83 @@ export default function ProjectsPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
       >
-        <div className="flex items-end justify-between mb-12">
+        <div className="flex items-end justify-between mb-16 px-4">
           <div>
-            <h1 className="text-5xl font-display tracking-tight text-foreground/90 mb-2">Projects</h1>
-            <p className="text-muted-foreground font-medium text-lg">
-              Your AI-powered test suites
+            <h1 className="text-6xl font-display tracking-tight text-foreground/90 mb-4">
+              Projects
+            </h1>
+            <p className="text-muted-foreground font-medium text-xl max-w-lg leading-relaxed">
+              Your AI-powered test suites, designed for speed and reliability.
             </p>
           </div>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="rounded-full px-8 py-6 text-base font-bold shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all bg-primary text-primary-foreground">
-                <Plus className="mr-2 h-5 w-5" />
+              <Button
+                size="lg"
+                className="rounded-2xl px-10 py-7 text-base font-bold shadow-2xl shadow-primary/30 hover:scale-[1.05] active:scale-[0.98] transition-all bg-primary text-primary-foreground"
+              >
+                <Plus className="mr-2 h-6 w-6 stroke-[3px]" />
                 New Project
               </Button>
             </DialogTrigger>
-            <DialogContent className="rounded-[2rem] border-border/40 shadow-glass">
-              <DialogHeader>
-                <DialogTitle className="font-display text-2xl">Create Project</DialogTitle>
+            <DialogContent className="rounded-[2.5rem] border-border/40 shadow-glass backdrop-blur-3xl bg-background/80 p-10 max-w-xl">
+              <DialogHeader className="mb-8">
+                <DialogTitle className="font-display text-4xl tracking-tight">
+                  Create Project
+                </DialogTitle>
               </DialogHeader>
-              <form onSubmit={handleCreate} className="space-y-5">
-                <div className="space-y-2">
-                  <Label htmlFor="name" className="font-semibold">Project Name</Label>
+              <form onSubmit={handleCreate} className="space-y-8">
+                <div className="space-y-3">
+                  <Label
+                    htmlFor="name"
+                    className="text-sm font-bold uppercase tracking-widest text-muted-foreground/60 ml-1"
+                  >
+                    Project Name
+                  </Label>
                   <Input
                     id="name"
                     name="name"
-                    placeholder="My Website"
+                    placeholder="e.g. Acme Dashboard"
                     required
-                    className="rounded-xl h-12 border-border/50"
+                    className="rounded-2xl h-14 border-border/40 bg-background/50 focus:ring-primary/20 text-lg px-6"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="baseUrl" className="font-semibold">Base URL</Label>
+                <div className="space-y-3">
+                  <Label
+                    htmlFor="baseUrl"
+                    className="text-sm font-bold uppercase tracking-widest text-muted-foreground/60 ml-1"
+                  >
+                    Base URL
+                  </Label>
                   <Input
                     id="baseUrl"
                     name="baseUrl"
                     type="url"
-                    placeholder="https://example.com"
+                    placeholder="https://app.acme.com"
                     required
-                    className="rounded-xl h-12 border-border/50"
+                    className="rounded-2xl h-14 border-border/40 bg-background/50 focus:ring-primary/20 text-lg px-6"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="description" className="font-semibold">Description (optional)</Label>
+                <div className="space-y-3">
+                  <Label
+                    htmlFor="description"
+                    className="text-sm font-bold uppercase tracking-widest text-muted-foreground/60 ml-1"
+                  >
+                    Description (optional)
+                  </Label>
                   <Textarea
                     id="description"
                     name="description"
                     placeholder="What does this project test?"
-                    className="rounded-xl border-border/50"
+                    className="rounded-2xl border-border/40 bg-background/50 focus:ring-primary/20 text-lg p-6 min-h-[120px]"
                   />
                 </div>
-                <Button type="submit" className="w-full rounded-full h-11 font-semibold" disabled={creating}>
+                <Button
+                  type="submit"
+                  size="lg"
+                  className="w-full rounded-2xl h-14 text-lg font-bold mt-4"
+                  disabled={creating}
+                >
                   {creating ? "Creating..." : "Create Project"}
                 </Button>
               </form>
@@ -147,7 +180,9 @@ export default function ProjectsPage() {
           <div className="flex items-center justify-center py-24">
             <div className="flex flex-col items-center gap-4">
               <div className="h-10 w-10 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-              <p className="text-sm font-semibold text-muted-foreground">Loading projects...</p>
+              <p className="text-sm font-semibold text-muted-foreground">
+                Loading projects...
+              </p>
             </div>
           </div>
         ) : projects.length === 0 ? (
@@ -156,11 +191,17 @@ export default function ProjectsPage() {
               <div className="h-20 w-20 rounded-3xl bg-primary/5 flex items-center justify-center mb-8 rotate-3">
                 <FolderKanban className="h-10 w-10 text-primary/40" />
               </div>
-              <p className="text-3xl font-display font-normal tracking-tight mb-3">No projects yet</p>
-              <p className="text-muted-foreground mb-10 text-center max-w-sm leading-relaxed">
-                Create your first project to start authoring and running AI-powered tests with natural language.
+              <p className="text-3xl font-display font-normal tracking-tight mb-3">
+                No projects yet
               </p>
-              <Button onClick={() => setDialogOpen(true)} className="rounded-2xl px-10 py-6 text-base font-bold shadow-xl shadow-primary/20 hover:scale-105 transition-transform">
+              <p className="text-muted-foreground mb-10 text-center max-w-sm leading-relaxed">
+                Create your first project to start authoring and running
+                AI-powered tests with natural language.
+              </p>
+              <Button
+                onClick={() => setDialogOpen(true)}
+                className="rounded-2xl px-10 py-6 text-base font-bold shadow-xl shadow-primary/20 hover:scale-105 transition-transform"
+              >
                 <Plus className="mr-2 h-5 w-5" />
                 Create Project
               </Button>
@@ -169,18 +210,18 @@ export default function ProjectsPage() {
         ) : (
           <div className="grid grid-cols-12 gap-6">
             {projects.map((project) => (
-              <Link 
-                key={project.id} 
+              <Link
+                key={project.id}
                 href={`/projects/${project.id}`}
                 className="group relative transition-all duration-700 col-span-12 md:col-span-6 lg:col-span-4"
               >
-                <Card className="h-full min-h-[300px] overflow-hidden border-border/30 shadow-elegant backdrop-blur-xl bg-card/40 hover:bg-card hover:border-primary/20 rounded-[2.5rem] transition-all duration-500 group-hover:shadow-2xl group-hover:-translate-y-2">
+                <Card className="h-full min-h-[300px] overflow-hidden border-border/30 shadow-elegant backdrop-blur-xl bg-card/40 hover:bg-card hover:border-primary/20 rounded-[2.5rem] transition-all duration-500">
                   <div className="absolute top-0 right-0 p-10 opacity-0 group-hover:opacity-100 transition-all duration-500 translate-x-4 group-hover:translate-x-0">
                     <div className="h-12 w-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg">
                       <ChevronRight className="h-6 w-6" />
                     </div>
                   </div>
-                  
+
                   <CardHeader className="p-10">
                     <div className="flex items-center gap-5 mb-6">
                       <div className="h-14 w-14 rounded-[1.25rem] bg-primary/5 flex items-center justify-center text-primary group-hover:rotate-6 transition-all duration-700">
@@ -196,23 +237,31 @@ export default function ProjectsPage() {
                       </div>
                     </div>
                   </CardHeader>
-                  
+
                   <CardContent className="px-10 pb-10">
                     {project.description && (
-                      <p className="text-muted-foreground/70 mb-10 line-clamp-2 leading-relaxed text-lg font-medium italic">
+                      <p className="text-muted-foreground/70 mb-10 line-clamp-2 leading-relaxed text-lg font-medium">
                         &ldquo;{project.description}&rdquo;
                       </p>
                     )}
-                    
+
                     <div className="flex items-center gap-10">
                       <div className="flex flex-col gap-1.5">
-                        <span className="text-3xl font-display">{project._count.tests}</span>
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Test Suites</span>
+                        <span className="text-3xl font-display">
+                          {project._count.tests}
+                        </span>
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">
+                          Test Suites
+                        </span>
                       </div>
                       <div className="h-10 w-px bg-primary/10" />
                       <div className="flex flex-col gap-1.5">
-                        <span className="text-3xl font-display">{project._count.runs}</span>
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Executions</span>
+                        <span className="text-3xl font-display">
+                          {project._count.runs}
+                        </span>
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">
+                          Executions
+                        </span>
                       </div>
                     </div>
                   </CardContent>

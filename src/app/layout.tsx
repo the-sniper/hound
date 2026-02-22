@@ -9,7 +9,7 @@ const inter = Inter({
 });
 
 const spaceGrotesk = Space_Grotesk({
-  variable: "--font-display",
+  variable: "--font-space",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
 });
@@ -28,7 +28,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="antialiased">
       <body
-        className={`${inter.variable} ${spaceGrotesk.variable} font-sans`}
+        className={`${inter.variable} ${spaceGrotesk.variable} font-sans antialiased selection:bg-primary/10`}
       >
         <Providers>{children}</Providers>
       </body>

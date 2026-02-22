@@ -38,19 +38,27 @@ interface Run {
   _count: { results: number };
 }
 
-export default function ProjectRunsPage() {
+interface TestData {
+  id: string;
+  name: string;
+  projectId: string;
+  projectName: string;
+}
+
+export default function TestRunsPage() {
   const params = useParams();
   const projectId = params.projectId as string;
+  const testId = params.testId as string;
 
   const [runs, setRuns] = useState<Run[]>([]);
   const [filteredRuns, setFilteredRuns] = useState<Run[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [projectName, setProjectName] = useState<string>("");
+  const [testData, setTestData] = useState<TestData | null>(null);
 
   useEffect(() => {
     loadRuns();
-  }, [projectId]);
+  }, [testId]);
 
   useEffect(() => {
     filterRuns();
@@ -59,18 +67,12 @@ export default function ProjectRunsPage() {
   async function loadRuns() {
     setLoading(true);
     try {
-      const [runsRes, projectRes] = await Promise.all([
-        fetch(`/api/projects/${projectId}/runs?limit=100`),
-        fetch(`/api/projects/${projectId}`),
-      ]);
+      const res = await fetch(`/api/tests/${testId}/runs?limit=100`);
 
-      if (runsRes.ok) {
-        const data = await runsRes.json();
+      if (res.ok) {
+        const data = await res.json();
         setRuns(data.runs);
-      }
-      if (projectRes.ok) {
-        const project = await projectRes.json();
-        setProjectName(project.name);
+        setTestData(data.test);
       }
     } catch (error) {
       console.error("Failed to load runs:", error);
@@ -154,7 +156,14 @@ export default function ProjectRunsPage() {
             href={`/projects/${projectId}`}
             className="hover:text-foreground transition-colors font-medium"
           >
-            {projectName}
+            {testData?.projectName || "Project"}
+          </Link>
+          <ChevronRight className="h-4 w-4" />
+          <Link
+            href={`/projects/${projectId}/tests/${testId}`}
+            className="hover:text-foreground transition-colors font-medium"
+          >
+            {testData?.name || "Test"}
           </Link>
           <ChevronRight className="h-4 w-4" />
           <span className="text-foreground font-semibold">Runs</span>
@@ -163,7 +172,7 @@ export default function ProjectRunsPage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
-            <Link href={`/projects/${projectId}`}>
+            <Link href={`/projects/${projectId}/tests/${testId}`}>
               <Button
                 variant="outline"
                 size="icon"
@@ -173,7 +182,7 @@ export default function ProjectRunsPage() {
               </Button>
             </Link>
             <h1 className="text-4xl font-display font-normal tracking-tight">
-              Test Runs
+              {testData?.name} Runs
             </h1>
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -253,7 +262,7 @@ export default function ProjectRunsPage() {
               </p>
               <p className="text-muted-foreground text-base">
                 {statusFilter === "all"
-                  ? "Run a test to see results here"
+                  ? "Run this test to see results here"
                   : "Try a different filter"}
               </p>
             </CardContent>
@@ -272,7 +281,7 @@ export default function ProjectRunsPage() {
                 }}
               >
                 <Link
-                  href={`/projects/${projectId}/tests/${run.test.id}/runs/${run.id}`}
+                  href={`/projects/${projectId}/tests/${testId}/runs/${run.id}`}
                 >
                   <Card className="group rounded-[2rem] border-border/40 shadow-glass backdrop-blur-xl bg-card/40 hover:bg-card/60 hover:border-primary/20 transition-all duration-500 cursor-pointer">
                     <CardContent className="p-5">
@@ -282,7 +291,7 @@ export default function ProjectRunsPage() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="font-semibold text-lg">
-                            {run.test.name}
+                            Run #{runs.length - i}
                           </p>
                           <div className="flex items-center gap-2 text-sm text-muted-foreground mt-0.5">
                             <span>{formatDistanceToNow(run.createdAt)}</span>

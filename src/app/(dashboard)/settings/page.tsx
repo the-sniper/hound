@@ -1,38 +1,147 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { User, Key, Bell, Shield, ChevronRight } from "lucide-react";
+import {
+  User,
+  Key,
+  Bell,
+  Shield,
+  ChevronRight,
+  Loader2,
+  Check,
+  Eye,
+  EyeOff,
+} from "lucide-react";
 import Link from "next/link";
+
+interface UserSettings {
+  id: string;
+  name: string | null;
+  email: string;
+  anthropicKeyMasked: string | null;
+  openaiKeyMasked: string | null;
+  hasAnthropicKey: boolean;
+  hasOpenAIKey: boolean;
+}
 
 export default function SettingsPage() {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [settings, setSettings] = useState<UserSettings | null>(null);
 
-  // This is a placeholder - in a real app you'd fetch the user's profile
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+  });
+
+  const [keyFormData, setKeyFormData] = useState({
+    anthropicKey: "",
+    openaiKey: "",
+  });
+
+  const [showAnthropicKey, setShowAnthropicKey] = useState(false);
+  const [showOpenAIKey, setShowOpenAIKey] = useState(false);
+
+  useEffect(() => {
+    loadSettings();
+  }, []);
+
+  async function loadSettings() {
+    setIsLoading(true);
+    try {
+      const res = await fetch("/api/user/settings");
+      if (res.ok) {
+        const data = await res.json();
+        setSettings(data);
+        setFormData({
+          name: data.name || "",
+          email: data.email || "",
+        });
+      }
+    } catch (error) {
+      toast.error("Failed to load settings");
+    }
+    setIsLoading(false);
+  }
 
   async function handleUpdateProfile(e: React.FormEvent) {
     e.preventDefault();
-    setIsLoading(true);
+    setIsSaving(true);
 
-    // Placeholder - would call API to update profile
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    try {
+      const res = await fetch("/api/user/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
 
-    toast.success("Profile updated", {
-      description: "Your profile has been updated successfully.",
-    });
+      if (res.ok) {
+        const data = await res.json();
+        setSettings((prev) =>
+          prev ? { ...prev, name: data.name, email: data.email } : null,
+        );
+        toast.success("Profile updated");
+      } else {
+        toast.error("Failed to update profile");
+      }
+    } catch (error) {
+      toast.error("Failed to update profile");
+    }
 
-    setIsLoading(false);
+    setIsSaving(false);
+  }
+
+  async function handleUpdateKey(
+    provider: "anthropic" | "openai",
+    key: string,
+  ) {
+    setIsSaving(true);
+    try {
+      const field = provider === "anthropic" ? "anthropicKey" : "openaiKey";
+      const res = await fetch("/api/user/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [field]: key }),
+      });
+
+      if (res.ok) {
+        toast.success(
+          `${provider === "anthropic" ? "Anthropic" : "OpenAI"} API key updated`,
+        );
+        loadSettings(); // Reload to get masked keys and status
+        setKeyFormData((prev) => ({ ...prev, [field]: "" }));
+      } else {
+        toast.error("Failed to update API key");
+      }
+    } catch (error) {
+      toast.error("Failed to update API key");
+    }
+    setIsSaving(false);
   }
 
   return (
@@ -44,7 +153,10 @@ export default function SettingsPage() {
       >
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-sm text-muted-foreground mb-6">
-          <Link href="/projects" className="hover:text-foreground transition-colors font-medium">
+          <Link
+            href="/projects"
+            className="hover:text-foreground transition-colors font-medium"
+          >
             Projects
           </Link>
           <ChevronRight className="h-4 w-4" />
@@ -52,7 +164,9 @@ export default function SettingsPage() {
         </div>
 
         <div className="mb-10">
-          <h1 className="text-4xl font-display font-normal tracking-tight mb-3">Settings</h1>
+          <h1 className="text-4xl font-display font-normal tracking-tight mb-3">
+            Settings
+          </h1>
           <p className="text-muted-foreground text-lg">
             Manage your account settings and preferences
           </p>
@@ -75,28 +189,52 @@ export default function SettingsPage() {
             <CardContent>
               <form onSubmit={handleUpdateProfile} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="name" className="font-semibold">Name</Label>
+                  <Label
+                    htmlFor="name"
+                    className="font-semibold text-xs uppercase tracking-wider text-muted-foreground/60"
+                  >
+                    Name
+                  </Label>
                   <Input
                     id="name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    value={formData.name}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, name: e.target.value }))
+                    }
                     placeholder="Your name"
-                    className="rounded-xl h-12 border-border/50"
+                    className="rounded-xl h-12 border-border/50 bg-background/50 focus:ring-primary/20"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="email" className="font-semibold">Email</Label>
+                  <Label
+                    htmlFor="email"
+                    className="font-semibold text-xs uppercase tracking-wider text-muted-foreground/60"
+                  >
+                    Email
+                  </Label>
                   <Input
                     id="email"
                     type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    value={formData.email}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        email: e.target.value,
+                      }))
+                    }
                     placeholder="your@email.com"
-                    className="rounded-xl h-12 border-border/50"
+                    className="rounded-xl h-12 border-border/50 bg-background/50 focus:ring-primary/20"
                   />
                 </div>
-                <Button type="submit" disabled={isLoading} className="rounded-full px-6 h-11 font-semibold">
-                  {isLoading ? "Saving..." : "Save Changes"}
+                <Button
+                  type="submit"
+                  disabled={isSaving || isLoading}
+                  className="rounded-full px-6 h-11 font-bold shadow-lg shadow-primary/20"
+                >
+                  {isSaving ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  ) : null}
+                  Save Changes
                 </Button>
               </form>
             </CardContent>
@@ -116,30 +254,190 @@ export default function SettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="rounded-xl border border-border/50 p-4">
+              {/* Anthropic Key */}
+              <div className="rounded-2xl border border-border/40 p-5 bg-background/40 backdrop-blur-sm group hover:border-primary/30 transition-all duration-300">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-semibold">Anthropic API Key</p>
-                    <p className="text-sm text-muted-foreground">
-                      Used for AI-powered test steps
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <p className="font-bold text-foreground">
+                        Anthropic API Key
+                      </p>
+                      {settings?.hasAnthropicKey && (
+                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 border border-green-500/20 text-[10px] font-black uppercase tracking-widest">
+                          <Check className="h-3 w-3" /> Configured
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground/60 font-medium">
+                      Used for AI-powered test steps (Claude models)
                     </p>
+                    {settings?.hasAnthropicKey && (
+                      <p className="text-xs font-mono text-muted-foreground/40 mt-1">
+                        Current: {settings.anthropicKeyMasked}
+                      </p>
+                    )}
                   </div>
-                  <Button variant="outline" size="sm" className="rounded-full px-4">
-                    Configure
-                  </Button>
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="rounded-xl px-4 font-bold border-border/60 hover:border-primary hover:text-primary transition-all shadow-sm"
+                      >
+                        {settings?.hasAnthropicKey ? "Update" : "Configure"}
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="rounded-3xl border-border/40 bg-popover/90 backdrop-blur-2xl">
+                      <DialogHeader>
+                        <DialogTitle>Configure Anthropic Key</DialogTitle>
+                        <DialogDescription>
+                          Enter your Anthropic API key. It will be used securely
+                          to power AI features.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="anthropicKey">API Key</Label>
+                          <div className="relative">
+                            <Input
+                              id="anthropicKey"
+                              type={showAnthropicKey ? "text" : "password"}
+                              value={keyFormData.anthropicKey}
+                              onChange={(e) =>
+                                setKeyFormData((prev) => ({
+                                  ...prev,
+                                  anthropicKey: e.target.value,
+                                }))
+                              }
+                              placeholder="sk-ant-..."
+                              className="rounded-xl border-border/50 pr-10"
+                            />
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setShowAnthropicKey(!showAnthropicKey)
+                              }
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                            >
+                              {showAnthropicKey ? (
+                                <EyeOff className="h-4 w-4" />
+                              ) : (
+                                <Eye className="h-4 w-4" />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button
+                          className="rounded-full px-6 font-bold"
+                          onClick={() =>
+                            handleUpdateKey(
+                              "anthropic",
+                              keyFormData.anthropicKey,
+                            )
+                          }
+                          disabled={!keyFormData.anthropicKey || isSaving}
+                        >
+                          {isSaving && (
+                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                          )}
+                          Save Key
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
                 </div>
               </div>
-              <div className="rounded-xl border border-border/50 p-4">
+
+              {/* OpenAI Key */}
+              <div className="rounded-2xl border border-border/40 p-5 bg-background/40 backdrop-blur-sm group hover:border-primary/30 transition-all duration-300">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-semibold">OpenAI API Key</p>
-                    <p className="text-sm text-muted-foreground">
-                      Fallback AI provider
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <p className="font-bold text-foreground">
+                        OpenAI API Key
+                      </p>
+                      {settings?.hasOpenAIKey && (
+                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 border border-green-500/20 text-[10px] font-black uppercase tracking-widest">
+                          <Check className="h-3 w-3" /> Configured
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground/60 font-medium">
+                      Fallback or alternative AI provider (GPT-4o)
                     </p>
+                    {settings?.hasOpenAIKey && (
+                      <p className="text-xs font-mono text-muted-foreground/40 mt-1">
+                        Current: {settings.openaiKeyMasked}
+                      </p>
+                    )}
                   </div>
-                  <Button variant="outline" size="sm" className="rounded-full px-4">
-                    Configure
-                  </Button>
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="rounded-xl px-4 font-bold border-border/60 hover:border-primary hover:text-primary transition-all shadow-sm"
+                      >
+                        {settings?.hasOpenAIKey ? "Update" : "Configure"}
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="rounded-3xl border-border/40 bg-popover/90 backdrop-blur-2xl">
+                      <DialogHeader>
+                        <DialogTitle>Configure OpenAI Key</DialogTitle>
+                        <DialogDescription>
+                          Enter your OpenAI API key. This will be used as a
+                          fallback for AI features.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="openaiKey">API Key</Label>
+                          <div className="relative">
+                            <Input
+                              id="openaiKey"
+                              type={showOpenAIKey ? "text" : "password"}
+                              value={keyFormData.openaiKey}
+                              onChange={(e) =>
+                                setKeyFormData((prev) => ({
+                                  ...prev,
+                                  openaiKey: e.target.value,
+                                }))
+                              }
+                              placeholder="sk-..."
+                              className="rounded-xl border-border/50 pr-10"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowOpenAIKey(!showOpenAIKey)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                            >
+                              {showOpenAIKey ? (
+                                <EyeOff className="h-4 w-4" />
+                              ) : (
+                                <Eye className="h-4 w-4" />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button
+                          className="rounded-full px-6 font-bold"
+                          onClick={() =>
+                            handleUpdateKey("openai", keyFormData.openaiKey)
+                          }
+                          disabled={!keyFormData.openaiKey || isSaving}
+                        >
+                          {isSaving && (
+                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                          )}
+                          Save Key
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
                 </div>
               </div>
             </CardContent>
@@ -152,14 +450,16 @@ export default function SettingsPage() {
                 <div className="w-10 h-10 rounded-xl bg-primary/5 flex items-center justify-center">
                   <Bell className="h-5 w-5 text-primary" />
                 </div>
-                <CardTitle className="font-display text-xl">Notifications</CardTitle>
+                <CardTitle className="font-display text-xl">
+                  Notifications
+                </CardTitle>
               </div>
               <CardDescription className="text-base mt-2">
                 Configure how you receive notifications
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm font-bold text-muted-foreground/40 uppercase tracking-widest bg-muted/30 p-8 rounded-2xl text-center">
                 Notification settings coming soon
               </p>
             </CardContent>
@@ -179,26 +479,34 @@ export default function SettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between p-2">
                 <div>
-                  <p className="font-semibold">Change Password</p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="font-bold">Change Password</p>
+                  <p className="text-sm text-muted-foreground/60 font-medium leading-relaxed">
                     Update your account password
                   </p>
                 </div>
-                <Button variant="outline" size="sm" className="rounded-full px-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-xl px-4 font-bold border-border/60"
+                >
                   Change
                 </Button>
               </div>
-              <Separator />
-              <div className="flex items-center justify-between">
+              <Separator className="bg-border/20" />
+              <div className="flex items-center justify-between p-2">
                 <div>
-                  <p className="font-semibold text-destructive">Danger Zone</p>
-                  <p className="text-sm text-muted-foreground">
-                    Permanently delete your account
+                  <p className="font-bold text-destructive">Danger Zone</p>
+                  <p className="text-sm text-muted-foreground/60 font-medium leading-relaxed">
+                    Permanently delete your account and all associated data
                   </p>
                 </div>
-                <Button variant="destructive" size="sm" className="rounded-full px-4">
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="rounded-xl px-4 font-bold shadow-lg shadow-destructive/10"
+                >
                   Delete Account
                 </Button>
               </div>

@@ -17,6 +17,8 @@ export async function checkAssertion(
       max_tokens: 1024,
       system: ASSERTION_SYSTEM_PROMPT,
       messages: [{ role: "user", content: prompt }],
+      anthropicKey: context.anthropicKey,
+      openaiKey: context.openaiKey,
     });
 
     const jsonMatch = response.content.match(/\{[\s\S]*\}/);

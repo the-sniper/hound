@@ -52,51 +52,67 @@ export function Sidebar({ projectId }: SidebarProps) {
     : [];
 
   return (
-    <aside className="flex h-full w-64 flex-col border-r bg-sidebar shadow-sm">
-      <div className="flex h-14 items-center px-6">
-        <Link href="/projects" className="flex items-center gap-2.5">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-xs shadow-md shadow-primary/20">
+    <aside className="flex h-full w-72 flex-col border-r border-border/40 bg-sidebar/50 backdrop-blur-xl shadow-elegant z-20">
+      <div className="flex h-20 items-center px-8">
+        <Link href="/projects" className="flex items-center gap-3 group">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground font-display font-bold text-sm shadow-lg shadow-primary/20 group-hover:scale-110 group-hover:rotate-3 transition-all duration-500">
             H
           </div>
-          <span className="text-lg font-bold tracking-tight text-foreground/90">Hound</span>
+          <span className="text-xl font-display font-bold tracking-tight text-foreground/90">
+            Hound
+          </span>
         </Link>
       </div>
 
-      <nav className="flex-1 space-y-1 px-3 py-4">
+      <nav className="flex-1 space-y-1.5 px-4 py-6">
         {mainNav.map((item) => (
           <Link
             key={item.href}
             href={item.href}
             className={cn(
-              "flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-all duration-200",
+              "flex items-center gap-3.5 rounded-2xl px-4 py-2.5 text-sm font-semibold transition-all duration-300 group",
               pathname === item.href
-                ? "bg-primary/5 text-primary shadow-sm ring-1 ring-primary/10"
-                : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
+                : "text-muted-foreground hover:bg-primary/5 hover:text-primary",
             )}
           >
-            <item.icon className={cn("h-4 w-4", pathname === item.href ? "text-primary" : "text-muted-foreground")} />
+            <item.icon
+              className={cn(
+                "h-4.5 w-4.5 transition-transform duration-300 group-hover:scale-110",
+                pathname === item.href
+                  ? "text-primary-foreground"
+                  : "text-muted-foreground group-hover:text-primary",
+              )}
+            />
             {item.label}
           </Link>
         ))}
 
         {projectNav.length > 0 && (
-          <div className="mt-6">
-            <p className="mb-2 px-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
-              Project
+          <div className="mt-10">
+            <p className="mb-4 px-5 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/40">
+              Project Workspace
             </p>
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               {projectNav.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    "flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-all duration-200",
+                    "flex items-center gap-3.5 rounded-2xl px-4 py-2.5 text-sm font-semibold transition-all duration-300 group",
                     pathname === item.href
-                      ? "bg-primary/5 text-primary shadow-sm ring-1 ring-primary/10"
-                      : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                      ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
+                      : "text-muted-foreground hover:bg-primary/5 hover:text-primary",
                   )}
                 >
-                  <item.icon className={cn("h-4 w-4", pathname === item.href ? "text-primary" : "text-muted-foreground")} />
+                  <item.icon
+                    className={cn(
+                      "h-4.5 w-4.5 transition-transform duration-300 group-hover:scale-110",
+                      pathname === item.href
+                        ? "text-primary-foreground"
+                        : "text-muted-foreground group-hover:text-primary",
+                    )}
+                  />
                   {item.label}
                 </Link>
               ))}
@@ -105,17 +121,24 @@ export function Sidebar({ projectId }: SidebarProps) {
         )}
       </nav>
 
-      <div className="mt-auto border-t border-border/50 p-4">
+      <div className="mt-auto border-t border-border/30 p-6">
         <Link
           href="/settings"
           className={cn(
-            "flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-all duration-200",
+            "flex items-center gap-3.5 rounded-2xl px-4 py-2.5 text-sm font-semibold transition-all duration-300 group",
             pathname === "/settings"
-              ? "bg-primary/5 text-primary shadow-sm ring-1 ring-primary/10"
-              : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+              ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
+              : "text-muted-foreground hover:bg-primary/5 hover:text-primary",
           )}
         >
-          <Settings className={cn("h-4 w-4", pathname === "/settings" ? "text-primary" : "text-muted-foreground")} />
+          <Settings
+            className={cn(
+              "h-4.5 w-4.5 transition-transform duration-300 group-hover:scale-110",
+              pathname === "/settings"
+                ? "text-primary-foreground"
+                : "text-muted-foreground group-hover:text-primary",
+            )}
+          />
           Settings
         </Link>
       </div>

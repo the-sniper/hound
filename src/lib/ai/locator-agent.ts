@@ -14,6 +14,8 @@ export async function findElement(
       max_tokens: 1024,
       system: LOCATOR_SYSTEM_PROMPT,
       messages: [{ role: "user", content: userMessage }],
+      anthropicKey: context.anthropicKey,
+      openaiKey: context.openaiKey,
     });
 
     const jsonMatch = response.content.match(/\{[\s\S]*\}/);

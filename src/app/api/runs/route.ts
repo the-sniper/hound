@@ -87,6 +87,7 @@ export async function POST(request: Request) {
         projectId: data.projectId,
         baseUrl,
         environmentId: data.environmentId,
+        userId: session.user.id,
       },
     });
 

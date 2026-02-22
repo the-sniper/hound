@@ -4,51 +4,34 @@ import { findElement } from "@/lib/ai/locator-agent";
 import { checkAssertion } from "@/lib/ai/assertion-agent";
 import type { AIAgentContext } from "@/types/ai";
 
-async function getAIContext(page: Page): Promise<AIAgentContext> {
+async function getAIContext(page: Page, anthropicKey?: string | null, openaiKey?: string | null): Promise<AIAgentContext> {
   // Get accessibility snapshot with type assertion for Playwright
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const accessibilityTree = await (page as any).accessibility?.snapshot?.() ?? {};
   
   // Also get simplified HTML structure for form elements
   const formElements = await page.evaluate(() => {
-    const elements: Array<{
-      tag: string;
-      type?: string;
-      name?: string;
-      id?: string;
-      placeholder?: string;
-      ariaLabel?: string;
-      classes?: string;
-      text?: string;
-    }> = [];
-    
-    // Get interactive elements
+    // ... same as before
+    const elements: any[] = [];
     const inputs = document.querySelectorAll('input, button, textarea, select, [type="submit"], [role="button"], [role="textbox"], [role="input"]');
     inputs.forEach((el) => {
-      const htmlEl = el as HTMLElement;
       const isButton = el.tagName.toLowerCase() === 'button' || el.getAttribute('type') === 'submit' || el.getAttribute('role') === 'button';
-      
-      // Get button text more accurately
       let text = '';
       if (isButton) {
-        text = (el as HTMLButtonElement).innerText?.trim() || 
-               el.getAttribute('value') || 
-               el.textContent?.trim() || '';
+        text = (el as any).innerText?.trim() || el.getAttribute('value') || el.textContent?.trim() || '';
       }
-      
       elements.push({
         tag: el.tagName.toLowerCase(),
-        type: (el as HTMLInputElement).type,
-        name: (el as HTMLInputElement).name,
+        type: (el as any).type,
+        name: (el as any).name,
         id: el.id,
-        placeholder: (el as HTMLInputElement).placeholder,
+        placeholder: (el as any).placeholder,
         ariaLabel: el.getAttribute('aria-label') || undefined,
         classes: el.className,
         text: text || undefined,
       });
     });
-    
-    return elements.slice(0, 50); // Limit to first 50 elements
+    return elements.slice(0, 50);
   });
   
   return {
@@ -56,11 +39,13 @@ async function getAIContext(page: Page): Promise<AIAgentContext> {
     pageTitle: await page.title(),
     accessibilityTree: JSON.stringify(accessibilityTree, null, 2),
     formElements,
+    anthropicKey,
+    openaiKey,
   };
 }
 
-async function resolveSelector(page: Page, target: string): Promise<string> {
-  const context = await getAIContext(page);
+async function resolveSelector(page: Page, target: string, anthropicKey?: string | null, openaiKey?: string | null): Promise<string> {
+  const context = await getAIContext(page, anthropicKey, openaiKey);
   const result = await findElement(target, context);
   return result.selector;
 }
@@ -68,7 +53,11 @@ async function resolveSelector(page: Page, target: string): Promise<string> {
 export type StepHandler = (
   page: Page,
   config: StepConfig,
-  context?: { stepCache?: Map<string, string> }
+  context?: { 
+    stepCache?: Map<string, string>;
+    anthropicKey?: string | null;
+    openaiKey?: string | null;
+  }
 ) => Promise<{ logs?: string[]; aiResponse?: unknown }>;
 
 export const stepHandlers: Record<string, StepHandler> = {
@@ -86,7 +75,7 @@ export const stepHandlers: Record<string, StepHandler> = {
 
     let selector = ctx?.stepCache?.get(config.target);
     if (!selector) {
-      selector = await resolveSelector(page, config.target);
+      selector = await resolveSelector(page, config.target, ctx?.anthropicKey, ctx?.openaiKey);
       ctx?.stepCache?.set(config.target, selector);
     }
 
@@ -146,7 +135,7 @@ export const stepHandlers: Record<string, StepHandler> = {
 
     let selector = ctx?.stepCache?.get(config.target);
     if (!selector) {
-      selector = await resolveSelector(page, config.target);
+      selector = await resolveSelector(page, config.target, ctx?.anthropicKey, ctx?.openaiKey);
       ctx?.stepCache?.set(config.target, selector);
     }
 
@@ -194,10 +183,10 @@ export const stepHandlers: Record<string, StepHandler> = {
     return {};
   },
 
-  AI_CHECK: async (page, config) => {
+  AI_CHECK: async (page, config, ctx) => {
     if (!config.assertion)
       throw new Error("Assertion is required for AI check");
-    const context = await getAIContext(page);
+    const context = await getAIContext(page, ctx?.anthropicKey, ctx?.openaiKey);
     const result = await checkAssertion(config.assertion, context);
     if (!result.passed) {
       throw new Error(`AI assertion failed: ${result.explanation}`);
@@ -205,16 +194,16 @@ export const stepHandlers: Record<string, StepHandler> = {
     return { aiResponse: result };
   },
 
-  AI_EXTRACT: async (page, config) => {
+  AI_EXTRACT: async (page, config, ctx) => {
     if (!config.query) throw new Error("Query is required for AI extract");
-    const context = await getAIContext(page);
+    const context = await getAIContext(page, ctx?.anthropicKey, ctx?.openaiKey);
     const result = await checkAssertion(`Extract: ${config.query}`, context);
     return { aiResponse: result };
   },
 
   AI_ACTION: async (page, config, ctx) => {
     if (!config.target) throw new Error("Action description is required");
-    const context = await getAIContext(page);
+    const context = await getAIContext(page, ctx?.anthropicKey, ctx?.openaiKey);
     const locResult = await findElement(config.target, context);
 
     ctx?.stepCache?.set(config.target, locResult.selector);

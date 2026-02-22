@@ -29,6 +29,8 @@ export async function analyzeFailure(
       max_tokens: 2048,
       system: FAILURE_ANALYSIS_SYSTEM_PROMPT,
       messages: [{ role: "user", content: prompt }],
+      anthropicKey: context.anthropicKey,
+      openaiKey: context.openaiKey,
     });
 
     const jsonMatch = response.content.match(/\{[\s\S]*\}/);

@@ -37,12 +37,21 @@ export async function createAIMessage(
     max_tokens: number;
     system: string;
     messages: Array<{ role: "user" | "assistant"; content: string }>;
+    anthropicKey?: string | null;
+    openaiKey?: string | null;
   }
 ): Promise<AIResponse> {
+  const anthropicApiKey = params.anthropicKey || process.env.ANTHROPIC_API_KEY;
+  const openaiApiKey = params.openaiKey || process.env.OPENAI_API_KEY;
+
   // Try Anthropic first
-  if (process.env.ANTHROPIC_API_KEY) {
+  if (anthropicApiKey) {
     try {
-      const response = await anthropic.messages.create({
+      const anthropicClient = params.anthropicKey 
+        ? new Anthropic({ apiKey: params.anthropicKey })
+        : anthropic;
+
+      const response = await anthropicClient.messages.create({
         model: params.model,
         max_tokens: params.max_tokens,
         system: params.system,
@@ -64,21 +73,27 @@ export async function createAIMessage(
   }
 
   // Fallback to OpenAI
-  if (!process.env.OPENAI_API_KEY) {
+  if (!openaiApiKey) {
     throw new Error("No AI API keys available. Please set ANTHROPIC_API_KEY or OPENAI_API_KEY.");
   }
 
   // Convert Anthropic format to OpenAI format
   const systemMessage = params.system ? { role: "system" as const, content: params.system } : null;
-  const openaiMessages = [
+  const openaiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     ...(systemMessage ? [systemMessage] : []),
-    ...params.messages.map((m) => ({
-      role: m.role === "assistant" ? "assistant" : "user" as const,
-      content: m.content,
-    })),
+    ...params.messages.map((m) => {
+      if (m.role === "assistant") {
+        return { role: "assistant" as const, content: m.content };
+      }
+      return { role: "user" as const, content: m.content };
+    }),
   ];
 
-  const response = await openai.chat.completions.create({
+  const openaiClient = params.openaiKey
+    ? new OpenAI({ apiKey: params.openaiKey })
+    : openai;
+
+  const response = await openaiClient.chat.completions.create({
     model: "gpt-4o-mini", // Use GPT-4o mini as fallback
     max_tokens: params.max_tokens,
     messages: openaiMessages,

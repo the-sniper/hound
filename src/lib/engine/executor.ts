@@ -69,6 +69,11 @@ export async function executeTestRun(options: ExecutorOptions): Promise<void> {
     data: { status: "RUNNING", startedAt: new Date() },
   });
 
+  const run = await db.testRun.findUnique({
+    where: { id: runId },
+    include: { user: true },
+  });
+
   const test = await db.test.findUnique({
     where: { id: testId },
     include: { steps: { orderBy: { orderIndex: "asc" } } },
