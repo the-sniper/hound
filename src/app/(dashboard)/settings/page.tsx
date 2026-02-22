@@ -67,6 +67,16 @@ export default function SettingsPage() {
   const [showAnthropicKey, setShowAnthropicKey] = useState(false);
   const [showOpenAIKey, setShowOpenAIKey] = useState(false);
 
+  const [passwordFormData, setPasswordFormData] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
   useEffect(() => {
     loadSettings();
   }, []);
@@ -140,6 +150,47 @@ export default function SettingsPage() {
       }
     } catch (error) {
       toast.error("Failed to update API key");
+    }
+    setIsSaving(false);
+  }
+
+  async function handleChangePassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (passwordFormData.newPassword !== passwordFormData.confirmPassword) {
+      toast.error("New passwords do not match");
+      return;
+    }
+
+    if (passwordFormData.newPassword.length < 8) {
+      toast.error("New password must be at least 8 characters");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const res = await fetch("/api/user/password", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentPassword: passwordFormData.currentPassword,
+          newPassword: passwordFormData.newPassword,
+        }),
+      });
+
+      if (res.ok) {
+        toast.success("Password updated successfully");
+        setPasswordFormData({
+          currentPassword: "",
+          newPassword: "",
+          confirmPassword: "",
+        });
+        setPasswordDialogOpen(false);
+      } else {
+        const data = await res.json();
+        toast.error(data.error || "Failed to update password");
+      }
+    } catch (error) {
+      toast.error("Failed to update password");
     }
     setIsSaving(false);
   }
@@ -486,13 +537,143 @@ export default function SettingsPage() {
                     Update your account password
                   </p>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="rounded-xl px-4 font-bold border-border/60"
+                <Dialog
+                  open={passwordDialogOpen}
+                  onOpenChange={setPasswordDialogOpen}
                 >
-                  Change
-                </Button>
+                  <DialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-xl px-4 font-bold border-border/60 hover:border-primary hover:text-primary transition-all shadow-sm"
+                    >
+                      Change
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="rounded-3xl border-border/40 bg-popover/90 backdrop-blur-2xl">
+                    <DialogHeader>
+                      <DialogTitle>Change Password</DialogTitle>
+                      <DialogDescription>
+                        Enter your current password and choose a new one.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <form
+                      onSubmit={handleChangePassword}
+                      className="space-y-4 py-4"
+                    >
+                      <div className="space-y-2">
+                        <Label htmlFor="currentPassword">
+                          Current Password
+                        </Label>
+                        <div className="relative">
+                          <Input
+                            id="currentPassword"
+                            type={showCurrentPassword ? "text" : "password"}
+                            value={passwordFormData.currentPassword}
+                            onChange={(e) =>
+                              setPasswordFormData((prev) => ({
+                                ...prev,
+                                currentPassword: e.target.value,
+                              }))
+                            }
+                            placeholder="••••••••"
+                            className="rounded-xl border-border/50 pr-10"
+                            required
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setShowCurrentPassword(!showCurrentPassword)
+                            }
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                          >
+                            {showCurrentPassword ? (
+                              <EyeOff className="h-4 w-4" />
+                            ) : (
+                              <Eye className="h-4 w-4" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="newPassword">New Password</Label>
+                        <div className="relative">
+                          <Input
+                            id="newPassword"
+                            type={showNewPassword ? "text" : "password"}
+                            value={passwordFormData.newPassword}
+                            onChange={(e) =>
+                              setPasswordFormData((prev) => ({
+                                ...prev,
+                                newPassword: e.target.value,
+                              }))
+                            }
+                            placeholder="Min 8 characters"
+                            className="rounded-xl border-border/50 pr-10"
+                            required
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowNewPassword(!showNewPassword)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                          >
+                            {showNewPassword ? (
+                              <EyeOff className="h-4 w-4" />
+                            ) : (
+                              <Eye className="h-4 w-4" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="confirmPassword">
+                          Confirm New Password
+                        </Label>
+                        <div className="relative">
+                          <Input
+                            id="confirmPassword"
+                            type={showConfirmPassword ? "text" : "password"}
+                            value={passwordFormData.confirmPassword}
+                            onChange={(e) =>
+                              setPasswordFormData((prev) => ({
+                                ...prev,
+                                confirmPassword: e.target.value,
+                              }))
+                            }
+                            placeholder="Confirm your new password"
+                            className="rounded-xl border-border/50 pr-10"
+                            required
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setShowConfirmPassword(!showConfirmPassword)
+                            }
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                          >
+                            {showConfirmPassword ? (
+                              <EyeOff className="h-4 w-4" />
+                            ) : (
+                              <Eye className="h-4 w-4" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                      <DialogFooter className="pt-4">
+                        <Button
+                          type="submit"
+                          className="rounded-full px-6 font-bold"
+                          disabled={isSaving}
+                        >
+                          {isSaving && (
+                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                          )}
+                          Update Password
+                        </Button>
+                      </DialogFooter>
+                    </form>
+                  </DialogContent>
+                </Dialog>
               </div>
               <Separator className="bg-border/20" />
               <div className="flex items-center justify-between p-2">
