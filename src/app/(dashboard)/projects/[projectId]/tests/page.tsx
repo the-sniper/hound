@@ -59,6 +59,7 @@ import {
   Check,
   Loader2,
   History,
+  Sparkles,
 } from "lucide-react";
 import { formatDistanceToNow, cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -542,13 +543,20 @@ export default function TestsPage() {
                 </p>
               </div>
             </div>
-            <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="rounded-2xl px-8 h-14 font-bold text-base shadow-elegant hover:scale-105 active:scale-95 transition-all">
-                  <Plus className="mr-2.5 h-5 w-5" />
-                  New Test
+            <div className="flex items-center gap-3">
+              <Link href={`/projects/${projectId}/generate`}>
+                <Button variant="outline" className="rounded-2xl px-6 h-14 font-bold text-base border-border/40 hover:bg-primary/5 hover:text-primary transition-all">
+                  <Sparkles className="mr-2 h-5 w-5" />
+                  AI Generate
                 </Button>
-              </DialogTrigger>
+              </Link>
+              <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button className="rounded-2xl px-8 h-14 font-bold text-base shadow-elegant hover:scale-105 active:scale-95 transition-all">
+                    <Plus className="mr-2.5 h-5 w-5" />
+                    New Test
+                  </Button>
+                </DialogTrigger>
               <DialogContent className="rounded-[2.5rem] border-border/40 shadow-glass bg-card/90 backdrop-blur-2xl p-8">
                 <DialogHeader className="mb-6">
                   <DialogTitle className="font-display text-4xl font-bold tracking-tight">
@@ -614,6 +622,7 @@ export default function TestsPage() {
                 </form>
               </DialogContent>
             </Dialog>
+            </div>
           </div>
 
           {/* Search & Bulk Actions */}

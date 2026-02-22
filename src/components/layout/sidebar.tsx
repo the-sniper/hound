@@ -9,14 +9,18 @@ import {
   Play,
   Settings,
   LayoutDashboard,
+  Timer,
+  Plug,
 } from "lucide-react";
 
-interface SidebarProps {
-  projectId?: string;
+function extractProjectId(pathname: string): string | null {
+  const match = pathname.match(/^\/projects\/([^/]+)/);
+  return match ? match[1] : null;
 }
 
-export function Sidebar({ projectId }: SidebarProps) {
+export function Sidebar() {
   const pathname = usePathname();
+  const projectId = extractProjectId(pathname);
 
   const mainNav = [
     {
@@ -32,24 +36,45 @@ export function Sidebar({ projectId }: SidebarProps) {
           label: "Overview",
           href: `/projects/${projectId}`,
           icon: LayoutDashboard,
+          exact: true,
         },
         {
           label: "Tests",
           href: `/projects/${projectId}/tests`,
           icon: FlaskConical,
+          exact: false,
         },
         {
           label: "Runs",
           href: `/projects/${projectId}/runs`,
           icon: Play,
+          exact: true,
+        },
+        {
+          label: "Monitoring",
+          href: `/projects/${projectId}/monitoring`,
+          icon: Timer,
+          exact: false,
+        },
+        {
+          label: "Integrations",
+          href: `/projects/${projectId}/integrations`,
+          icon: Plug,
+          exact: false,
         },
         {
           label: "Settings",
           href: `/projects/${projectId}/settings`,
           icon: Settings,
+          exact: false,
         },
       ]
     : [];
+
+  function isActive(href: string, exact: boolean): boolean {
+    if (exact) return pathname === href;
+    return pathname === href || pathname.startsWith(href + "/");
+  }
 
   return (
     <aside className="flex h-full w-72 flex-col border-r border-border/40 bg-sidebar/50 backdrop-blur-xl shadow-elegant z-20">
@@ -94,28 +119,31 @@ export function Sidebar({ projectId }: SidebarProps) {
               Project Workspace
             </p>
             <div className="space-y-1.5">
-              {projectNav.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    "flex items-center gap-3.5 rounded-2xl px-4 py-2.5 text-sm font-semibold transition-all duration-300 group",
-                    pathname === item.href
-                      ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
-                      : "text-muted-foreground hover:bg-primary/5 hover:text-primary",
-                  )}
-                >
-                  <item.icon
+              {projectNav.map((item) => {
+                const active = isActive(item.href, item.exact);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
                     className={cn(
-                      "h-4.5 w-4.5 transition-transform duration-300 group-hover:scale-110",
-                      pathname === item.href
-                        ? "text-primary-foreground"
-                        : "text-muted-foreground group-hover:text-primary",
+                      "flex items-center gap-3.5 rounded-2xl px-4 py-2.5 text-sm font-semibold transition-all duration-300 group",
+                      active
+                        ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
+                        : "text-muted-foreground hover:bg-primary/5 hover:text-primary",
                     )}
-                  />
-                  {item.label}
-                </Link>
-              ))}
+                  >
+                    <item.icon
+                      className={cn(
+                        "h-4.5 w-4.5 transition-transform duration-300 group-hover:scale-110",
+                        active
+                          ? "text-primary-foreground"
+                          : "text-muted-foreground group-hover:text-primary",
+                      )}
+                    />
+                    {item.label}
+                  </Link>
+                );
+              })}
             </div>
           </div>
         )}

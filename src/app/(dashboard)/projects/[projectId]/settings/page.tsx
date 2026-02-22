@@ -25,6 +25,13 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   ChevronLeft,
   ChevronRight,
   Save,
@@ -36,6 +43,9 @@ import {
   X,
   Check,
   Globe,
+  BarChart3,
+  Loader2,
+  Accessibility,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -76,6 +86,16 @@ export default function ProjectSettingsPage() {
     description: "",
   });
 
+  // Performance budgets & WCAG
+  const [perfBudgets, setPerfBudgets] = useState({
+    perfBudgetLcp: "",
+    perfBudgetCls: "",
+    perfBudgetInp: "",
+    perfBudgetTtfb: "",
+  });
+  const [wcagLevel, setWcagLevel] = useState("AA");
+  const [savingPerf, setSavingPerf] = useState(false);
+
   // Environment state
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [isCreatingEnv, setIsCreatingEnv] = useState(false);
@@ -104,6 +124,13 @@ export default function ProjectSettingsPage() {
           baseUrl: data.baseUrl,
           description: data.description ?? "",
         });
+        setPerfBudgets({
+          perfBudgetLcp: data.perfBudgetLcp?.toString() || "",
+          perfBudgetCls: data.perfBudgetCls?.toString() || "",
+          perfBudgetInp: data.perfBudgetInp?.toString() || "",
+          perfBudgetTtfb: data.perfBudgetTtfb?.toString() || "",
+        });
+        setWcagLevel(data.wcagLevel || "AA");
       } else {
         toast.error("Failed to load project");
       }
@@ -272,6 +299,31 @@ export default function ProjectSettingsPage() {
       toast.error("Failed to delete project");
     }
     setDeleteDialogOpen(false);
+  }
+
+  async function handleSavePerformance() {
+    setSavingPerf(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/performance`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          perfBudgetLcp: perfBudgets.perfBudgetLcp ? parseInt(perfBudgets.perfBudgetLcp) : null,
+          perfBudgetCls: perfBudgets.perfBudgetCls ? parseFloat(perfBudgets.perfBudgetCls) : null,
+          perfBudgetInp: perfBudgets.perfBudgetInp ? parseInt(perfBudgets.perfBudgetInp) : null,
+          perfBudgetTtfb: perfBudgets.perfBudgetTtfb ? parseInt(perfBudgets.perfBudgetTtfb) : null,
+          wcagLevel,
+        }),
+      });
+      if (res.ok) {
+        toast.success("Performance settings saved");
+      } else {
+        toast.error("Failed to save performance settings");
+      }
+    } catch {
+      toast.error("Failed to save performance settings");
+    }
+    setSavingPerf(false);
   }
 
   const currentUserRole = project?.members.find(
@@ -718,6 +770,86 @@ export default function ProjectSettingsPage() {
                 </div>
               ))}
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Performance Budgets */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BarChart3 className="h-5 w-5" />
+              Performance Budgets
+            </CardTitle>
+            <CardDescription>
+              Set thresholds for Core Web Vitals. Tests will flag metrics that exceed these budgets.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>LCP (ms)</Label>
+                <Input
+                  type="number"
+                  value={perfBudgets.perfBudgetLcp}
+                  onChange={(e) => setPerfBudgets({ ...perfBudgets, perfBudgetLcp: e.target.value })}
+                  placeholder="2500"
+                />
+                <p className="text-xs text-muted-foreground">Largest Contentful Paint</p>
+              </div>
+              <div className="space-y-2">
+                <Label>CLS</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={perfBudgets.perfBudgetCls}
+                  onChange={(e) => setPerfBudgets({ ...perfBudgets, perfBudgetCls: e.target.value })}
+                  placeholder="0.1"
+                />
+                <p className="text-xs text-muted-foreground">Cumulative Layout Shift</p>
+              </div>
+              <div className="space-y-2">
+                <Label>INP (ms)</Label>
+                <Input
+                  type="number"
+                  value={perfBudgets.perfBudgetInp}
+                  onChange={(e) => setPerfBudgets({ ...perfBudgets, perfBudgetInp: e.target.value })}
+                  placeholder="200"
+                />
+                <p className="text-xs text-muted-foreground">Interaction to Next Paint</p>
+              </div>
+              <div className="space-y-2">
+                <Label>TTFB (ms)</Label>
+                <Input
+                  type="number"
+                  value={perfBudgets.perfBudgetTtfb}
+                  onChange={(e) => setPerfBudgets({ ...perfBudgets, perfBudgetTtfb: e.target.value })}
+                  placeholder="800"
+                />
+                <p className="text-xs text-muted-foreground">Time to First Byte</p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Accessibility className="h-4 w-4" />
+                WCAG Compliance Level
+              </Label>
+              <Select value={wcagLevel} onValueChange={setWcagLevel}>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="A">WCAG A</SelectItem>
+                  <SelectItem value="AA">WCAG AA (Recommended)</SelectItem>
+                  <SelectItem value="AAA">WCAG AAA</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Button onClick={handleSavePerformance} disabled={savingPerf}>
+              {savingPerf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+              Save Performance Settings
+            </Button>
           </CardContent>
         </Card>
 

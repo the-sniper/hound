@@ -28,6 +28,9 @@ import {
   Activity,
   TrendingUp,
   BarChart3,
+  Shield,
+  Zap,
+  User,
 } from "lucide-react";
 import { formatDistanceToNow, cn } from "@/lib/utils";
 
@@ -71,6 +74,9 @@ export default function ProjectDetailPage() {
   const [tests, setTests] = useState<Test[]>([]);
   const [recentRuns, setRecentRuns] = useState<Run[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activityLog, setActivityLog] = useState<any[]>([]);
+  const [perfTrends, setPerfTrends] = useState<any[]>([]);
+  const [securityGrade, setSecurityGrade] = useState<string | null>(null);
 
   useEffect(() => {
     loadProject();
@@ -91,6 +97,37 @@ export default function ProjectDetailPage() {
         const data = await runsRes.json();
         setRecentRuns(data.runs);
       }
+
+      // Load activity feed
+      try {
+        const activityRes = await fetch(`/api/projects/${projectId}/activity?limit=10`);
+        if (activityRes.ok) {
+          const data = await activityRes.json();
+          setActivityLog(Array.isArray(data) ? data : data.activities || data.logs || []);
+        }
+      } catch {}
+
+      // Load performance trends
+      try {
+        const perfRes = await fetch(`/api/projects/${projectId}/performance?metric=LCP`);
+        if (perfRes.ok) {
+          const data = await perfRes.json();
+          setPerfTrends(Array.isArray(data) ? data : data.trends || data.metrics || []);
+        }
+      } catch {}
+
+      // Load latest security grade from recent runs
+      try {
+        if (recentRuns.length > 0) {
+          const secRes = await fetch(`/api/runs/${recentRuns[0]?.id}/security`);
+          if (secRes.ok) {
+            const data = await secRes.json();
+            if (data.grade || data.securityGrade) {
+              setSecurityGrade(data.grade || data.securityGrade);
+            }
+          }
+        }
+      } catch {}
     } catch (error) {
       console.error("Failed to load project:", error);
     }
@@ -516,6 +553,106 @@ export default function ProjectDetailPage() {
                 ))}
               </div>
             )}
+          </div>
+        </div>
+
+        {/* Activity Feed, Performance Trends, Security Overview */}
+        <div className="grid gap-8 lg:grid-cols-3">
+          {/* Activity Feed */}
+          <Card className="rounded-[2rem] border-border/40 bg-card/40 backdrop-blur-xl shadow-elegant lg:col-span-2">
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <Activity className="h-5 w-5 text-primary" />
+                <CardTitle className="text-lg font-display">Recent Activity</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {activityLog.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-6">No recent activity</p>
+              ) : (
+                <div className="space-y-3">
+                  {activityLog.slice(0, 10).map((entry: any, i: number) => (
+                    <motion.div
+                      key={entry.id || i}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.05 }}
+                      className="flex items-center gap-3 p-3 rounded-xl hover:bg-primary/[0.02] transition-colors"
+                    >
+                      <div className="w-8 h-8 rounded-full bg-primary/5 flex items-center justify-center shrink-0">
+                        <User className="h-4 w-4 text-primary/60" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">
+                          <span className="font-bold">{entry.user?.name || entry.user?.email || "User"}</span>
+                          {" "}{entry.action}{" "}
+                          <span className="text-muted-foreground">{entry.entityType}</span>
+                        </p>
+                      </div>
+                      <span className="text-[10px] text-muted-foreground/50 shrink-0">
+                        {entry.createdAt ? formatDistanceToNow(entry.createdAt) : ""}
+                      </span>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Right column: Performance + Security */}
+          <div className="space-y-8">
+            {/* Performance Trends */}
+            <Card className="rounded-[2rem] border-border/40 bg-card/40 backdrop-blur-xl shadow-elegant">
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2">
+                  <Zap className="h-5 w-5 text-primary" />
+                  <CardTitle className="text-lg font-display">Performance</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {perfTrends.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-6">No performance data yet</p>
+                ) : (
+                  <div className="space-y-3">
+                    {perfTrends.slice(0, 5).map((metric: any, i: number) => (
+                      <div key={i} className="flex items-center justify-between p-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground/60">{metric.name || metric.metric}</span>
+                        <span className={`text-sm font-bold ${metric.overBudget ? "text-red-600" : "text-foreground"}`}>
+                          {metric.name === "CLS" ? metric.value?.toFixed(3) : `${Math.round(metric.value || 0)}ms`}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Security Overview */}
+            <Card className="rounded-[2rem] border-border/40 bg-card/40 backdrop-blur-xl shadow-elegant">
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2">
+                  <Shield className="h-5 w-5 text-primary" />
+                  <CardTitle className="text-lg font-display">Security</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {securityGrade ? (
+                  <div className="flex items-center gap-4">
+                    <div className={`text-4xl font-display font-bold ${
+                      securityGrade === "A" ? "text-green-600" :
+                      securityGrade === "B" ? "text-lime-600" :
+                      securityGrade === "C" ? "text-yellow-600" :
+                      "text-red-600"
+                    }`}>
+                      {securityGrade}
+                    </div>
+                    <p className="text-sm text-muted-foreground">Latest security grade from most recent run</p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-6">No security data yet. Run a security scan to see results.</p>
+                )}
+              </CardContent>
+            </Card>
           </div>
         </div>
       </motion.div>

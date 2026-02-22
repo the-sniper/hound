@@ -15,6 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Progress } from "@/components/ui/progress";
 import {
   Dialog,
   DialogContent,
@@ -35,6 +36,11 @@ import {
   Check,
   Eye,
   EyeOff,
+  BarChart3,
+  Zap,
+  FolderKanban,
+  FlaskConical,
+  Play,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -77,8 +83,18 @@ export default function SettingsPage() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
+  // Usage state
+  const [usage, setUsage] = useState<{
+    tier: string;
+    runsThisMonth: number;
+    runLimit: number;
+    testsCount: number;
+    projectsCount: number;
+  } | null>(null);
+
   useEffect(() => {
     loadSettings();
+    loadUsage();
   }, []);
 
   async function loadSettings() {
@@ -97,6 +113,24 @@ export default function SettingsPage() {
       toast.error("Failed to load settings");
     }
     setIsLoading(false);
+  }
+
+  async function loadUsage() {
+    try {
+      const res = await fetch("/api/usage");
+      if (res.ok) {
+        const data = await res.json();
+        setUsage({
+          tier: data.tier || "free",
+          runsThisMonth: data.runsThisMonth || 0,
+          runLimit: data.runLimit || data.limit || 100,
+          testsCount: data.testsCount || 0,
+          projectsCount: data.projectsCount || 0,
+        });
+      }
+    } catch {
+      // Usage endpoint may not exist yet
+    }
   }
 
   async function handleUpdateProfile(e: React.FormEvent) {
@@ -691,6 +725,79 @@ export default function SettingsPage() {
                   Delete Account
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Usage & Billing */}
+          <Card className="rounded-[2.5rem] border-border/40 bg-card/40 backdrop-blur-xl shadow-elegant overflow-hidden">
+            <CardHeader className="px-8 pt-8 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-2xl bg-primary/5">
+                  <BarChart3 className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <CardTitle className="text-xl font-display font-bold tracking-tight">
+                    Usage &amp; Plan
+                  </CardTitle>
+                  <CardDescription className="text-sm font-medium text-muted-foreground/60 mt-0.5">
+                    Current usage and subscription details
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="px-8 pb-8 space-y-6">
+              {usage ? (
+                <>
+                  <div className="flex items-center gap-4 p-4 rounded-2xl bg-primary/5 border border-primary/10">
+                    <Zap className="h-6 w-6 text-primary" />
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-wider text-primary/80">Current Plan</p>
+                      <p className="text-2xl font-display font-bold capitalize">{usage.tier}</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-bold text-muted-foreground/60">Runs This Month</span>
+                      <span className="text-sm font-bold">
+                        {usage.runsThisMonth} / {usage.runLimit === -1 ? "Unlimited" : usage.runLimit}
+                      </span>
+                    </div>
+                    {usage.runLimit !== -1 && (
+                      <Progress
+                        value={Math.min((usage.runsThisMonth / usage.runLimit) * 100, 100)}
+                        className="h-2 rounded-full"
+                      />
+                    )}
+                    {usage.runLimit !== -1 && usage.runsThisMonth / usage.runLimit > 0.8 && (
+                      <p className="text-xs text-amber-600 font-bold">
+                        You&apos;re approaching your monthly run limit
+                      </p>
+                    )}
+                  </div>
+
+                  <Separator className="bg-border/20" />
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex items-center gap-3 p-3 rounded-xl bg-background/50">
+                      <FolderKanban className="h-4 w-4 text-muted-foreground/50" />
+                      <div>
+                        <p className="text-xs text-muted-foreground/50 font-bold">Projects</p>
+                        <p className="text-lg font-bold">{usage.projectsCount}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 p-3 rounded-xl bg-background/50">
+                      <FlaskConical className="h-4 w-4 text-muted-foreground/50" />
+                      <div>
+                        <p className="text-xs text-muted-foreground/50 font-bold">Tests</p>
+                        <p className="text-lg font-bold">{usage.testsCount}</p>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-6">Loading usage data...</p>
+              )}
             </CardContent>
           </Card>
         </div>

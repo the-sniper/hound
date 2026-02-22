@@ -39,7 +39,25 @@ import {
   Video,
   Globe,
   AlertTriangle,
+  Accessibility,
+  Shield,
+  BarChart3,
+  GitBranch,
+  UserPlus,
+  MessageSquare,
+  Send,
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { toast } from "sonner";
 import { formatDistanceToNow, formatDuration } from "@/lib/utils";
 
 interface Run {
@@ -303,9 +321,40 @@ export default function RunViewerPage() {
   const [harLoading, setHarLoading] = useState(false);
   const [harLoaded, setHarLoaded] = useState(false);
 
+  // Accessibility state
+  const [a11yData, setA11yData] = useState<{ score: number; violations: any[]; summary: Record<string, number> } | null>(null);
+  const [a11yLoading, setA11yLoading] = useState(false);
+
+  // Performance state
+  const [perfData, setPerfData] = useState<{ metrics: any[]; networkTimings: any[] } | null>(null);
+  const [perfLoading, setPerfLoading] = useState(false);
+
+  // Security state
+  const [secData, setSecData] = useState<{ grade: string; findings: any[]; summary: Record<string, number> } | null>(null);
+  const [secLoading, setSecLoading] = useState(false);
+
+  // Correlate state
+  const [correlateDialogOpen, setCorrelateDialogOpen] = useState(false);
+  const [correlateInput, setCorrelateInput] = useState("");
+  const [correlateResult, setCorrelateResult] = useState<any>(null);
+  const [correlating, setCorrelating] = useState(false);
+
+  // Assign state
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [assignee, setAssignee] = useState("");
+  const [assignNote, setAssignNote] = useState("");
+  const [assigning, setAssigning] = useState(false);
+
+  // Comments state
+  const [comments, setComments] = useState<any[]>([]);
+  const [newComment, setNewComment] = useState("");
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [postingComment, setPostingComment] = useState(false);
+
   useEffect(() => {
     loadRun();
     setupEventSource();
+    loadComments();
 
     return () => {
       if (eventSourceRef.current) {
@@ -448,6 +497,138 @@ export default function RunViewerPage() {
     }
     setHarLoading(false);
     setHarLoaded(true);
+  }
+
+  async function loadAccessibility() {
+    if (a11yData || a11yLoading) return;
+    setA11yLoading(true);
+    try {
+      const res = await fetch(`/api/runs/${runId}/accessibility`);
+      if (res.ok) {
+        const data = await res.json();
+        const violations = data.violations || data.results || [];
+        const summary: Record<string, number> = { critical: 0, serious: 0, moderate: 0, minor: 0 };
+        violations.forEach((v: any) => {
+          const impact = v.impact?.toLowerCase() || "minor";
+          if (summary[impact] !== undefined) summary[impact]++;
+        });
+        setA11yData({ score: data.score ?? data.accessibilityScore ?? 0, violations, summary });
+      }
+    } catch (error) {
+      console.error("Failed to load accessibility data:", error);
+    }
+    setA11yLoading(false);
+  }
+
+  async function loadPerformance() {
+    if (perfData || perfLoading) return;
+    setPerfLoading(true);
+    try {
+      const res = await fetch(`/api/runs/${runId}/performance`);
+      if (res.ok) {
+        const data = await res.json();
+        setPerfData({
+          metrics: data.metrics || data || [],
+          networkTimings: data.networkTimings || [],
+        });
+      }
+    } catch (error) {
+      console.error("Failed to load performance data:", error);
+    }
+    setPerfLoading(false);
+  }
+
+  async function loadSecurity() {
+    if (secData || secLoading) return;
+    setSecLoading(true);
+    try {
+      const res = await fetch(`/api/runs/${runId}/security`);
+      if (res.ok) {
+        const data = await res.json();
+        const findings = data.findings || data || [];
+        const summary: Record<string, number> = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
+        findings.forEach((f: any) => {
+          const sev = f.severity?.toLowerCase() || "info";
+          if (summary[sev] !== undefined) summary[sev]++;
+        });
+        setSecData({ grade: data.grade || data.securityGrade || "N/A", findings, summary });
+      }
+    } catch (error) {
+      console.error("Failed to load security data:", error);
+    }
+    setSecLoading(false);
+  }
+
+  async function handleCorrelate() {
+    setCorrelating(true);
+    try {
+      const res = await fetch(`/api/runs/${runId}/correlate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ diff: correlateInput }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCorrelateResult(data);
+      } else {
+        console.error("Correlation failed");
+      }
+    } catch {
+      console.error("Correlation failed");
+    }
+    setCorrelating(false);
+  }
+
+  async function handleAssign() {
+    setAssigning(true);
+    try {
+      const res = await fetch(`/api/runs/${runId}/assign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assignee, note: assignNote }),
+      });
+      if (res.ok) {
+        setAssignDialogOpen(false);
+        setAssignee("");
+        setAssignNote("");
+      }
+    } catch {
+      console.error("Assignment failed");
+    }
+    setAssigning(false);
+  }
+
+  async function loadComments() {
+    setCommentsLoading(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/comments?targetType=run&targetId=${runId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setComments(data.comments || data || []);
+      }
+    } catch (error) {
+      console.error("Failed to load comments:", error);
+    }
+    setCommentsLoading(false);
+  }
+
+  async function handlePostComment() {
+    if (!newComment.trim()) return;
+    setPostingComment(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: newComment, targetType: "run", targetId: runId }),
+      });
+      if (res.ok) {
+        setNewComment("");
+        await loadComments();
+      }
+    } catch {
+      console.error("Failed to post comment");
+    }
+    setPostingComment(false);
   }
 
   function getStatusIcon(status: string) {
@@ -636,6 +817,18 @@ export default function RunViewerPage() {
               Network
             </TabsTrigger>
           )}
+          <TabsTrigger value="accessibility" onClick={loadAccessibility}>
+            <Accessibility className="h-4 w-4 mr-1" />
+            A11y
+          </TabsTrigger>
+          <TabsTrigger value="performance" onClick={loadPerformance}>
+            <BarChart3 className="h-4 w-4 mr-1" />
+            Perf
+          </TabsTrigger>
+          <TabsTrigger value="security" onClick={loadSecurity}>
+            <Shield className="h-4 w-4 mr-1" />
+            Security
+          </TabsTrigger>
           <TabsTrigger value="compare" onClick={loadBaselineRuns}>
             <GitCompare className="h-4 w-4 mr-1" />
             Compare
@@ -1283,7 +1476,355 @@ export default function RunViewerPage() {
             </Card>
           </div>
         </TabsContent>
+        {/* Accessibility Tab */}
+        <TabsContent value="accessibility">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Accessibility className="h-5 w-5" />
+                Accessibility Report
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {a11yLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : a11yData ? (
+                <div className="space-y-6">
+                  <div className="flex items-center gap-6">
+                    <div className={`text-5xl font-display font-bold ${
+                      a11yData.score > 80 ? "text-green-600" : a11yData.score > 50 ? "text-yellow-600" : "text-red-600"
+                    }`}>
+                      {a11yData.score}
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold uppercase tracking-wider text-muted-foreground/60">Accessibility Score</p>
+                      <p className="text-sm text-muted-foreground">
+                        {a11yData.score > 80 ? "Good compliance" : a11yData.score > 50 ? "Needs improvement" : "Significant issues found"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-4">
+                    {(["critical", "serious", "moderate", "minor"] as const).map((impact) => (
+                      <Card key={impact} className="p-4">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">{impact}</p>
+                        <p className={`text-2xl font-bold ${
+                          impact === "critical" ? "text-red-600" : impact === "serious" ? "text-orange-600" : impact === "moderate" ? "text-yellow-600" : "text-blue-600"
+                        }`}>{a11yData.summary[impact] || 0}</p>
+                      </Card>
+                    ))}
+                  </div>
+
+                  {a11yData.violations.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-sm font-bold text-muted-foreground">Violations ({a11yData.violations.length})</p>
+                      <div className="rounded-xl border border-border/40 overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead className="bg-muted/50">
+                            <tr>
+                              <th className="text-left p-3 font-bold text-xs uppercase tracking-wider">Rule</th>
+                              <th className="text-left p-3 font-bold text-xs uppercase tracking-wider">Impact</th>
+                              <th className="text-left p-3 font-bold text-xs uppercase tracking-wider">WCAG</th>
+                              <th className="text-left p-3 font-bold text-xs uppercase tracking-wider">Target</th>
+                              <th className="text-left p-3 font-bold text-xs uppercase tracking-wider">Description</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {a11yData.violations.map((v: any, i: number) => (
+                              <tr key={i} className="border-t border-border/30">
+                                <td className="p-3 font-mono text-xs">{v.ruleId || v.id}</td>
+                                <td className="p-3">
+                                  <Badge variant="outline" className={`text-[10px] ${
+                                    v.impact === "critical" ? "border-red-500 text-red-600" :
+                                    v.impact === "serious" ? "border-orange-500 text-orange-600" :
+                                    v.impact === "moderate" ? "border-yellow-500 text-yellow-600" :
+                                    "border-blue-500 text-blue-600"
+                                  }`}>{v.impact}</Badge>
+                                </td>
+                                <td className="p-3 text-xs">{v.wcagCriteria || v.tags?.join(", ") || "-"}</td>
+                                <td className="p-3 font-mono text-xs max-w-[200px] truncate">{v.target || v.nodes?.[0]?.target?.[0] || "-"}</td>
+                                <td className="p-3 text-xs max-w-[300px] truncate">{v.description || v.help}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-center text-muted-foreground py-8">No accessibility data available for this run</p>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Performance Tab */}
+        <TabsContent value="performance">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BarChart3 className="h-5 w-5" />
+                Performance Metrics
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {perfLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : perfData && perfData.metrics.length > 0 ? (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                    {(Array.isArray(perfData.metrics) ? perfData.metrics : []).map((m: any, i: number) => (
+                      <Card key={i} className={`p-4 ${m.overBudget ? "border-red-500/50 bg-red-500/5" : ""}`}>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">{m.name}</p>
+                        <p className={`text-2xl font-bold ${m.overBudget ? "text-red-600" : "text-foreground"}`}>
+                          {m.name === "CLS" ? m.value?.toFixed(3) : `${Math.round(m.value || 0)}${m.unit || "ms"}`}
+                        </p>
+                        {m.budgetMax != null && (
+                          <p className={`text-[10px] font-bold ${m.overBudget ? "text-red-500" : "text-green-500"}`}>
+                            Budget: {m.name === "CLS" ? m.budgetMax?.toFixed(2) : `${m.budgetMax}${m.unit || "ms"}`}
+                            {m.overBudget && " — EXCEEDED"}
+                          </p>
+                        )}
+                      </Card>
+                    ))}
+                  </div>
+
+                  {perfData.networkTimings.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-sm font-bold text-muted-foreground">Network Timing Breakdown</p>
+                      <div className="grid grid-cols-5 gap-4">
+                        {perfData.networkTimings.map((t: any, i: number) => (
+                          <Card key={i} className="p-4">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">{t.name}</p>
+                            <p className="text-lg font-bold">{Math.round(t.value)}ms</p>
+                          </Card>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-center text-muted-foreground py-8">No performance data available for this run</p>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Security Tab */}
+        <TabsContent value="security">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5" />
+                Security Report
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {secLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : secData ? (
+                <div className="space-y-6">
+                  <div className="flex items-center gap-6">
+                    <div className={`text-5xl font-display font-bold ${
+                      secData.grade === "A" ? "text-green-600" :
+                      secData.grade === "B" ? "text-lime-600" :
+                      secData.grade === "C" ? "text-yellow-600" :
+                      secData.grade === "D" ? "text-orange-600" :
+                      "text-red-600"
+                    }`}>
+                      {secData.grade}
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold uppercase tracking-wider text-muted-foreground/60">Security Grade</p>
+                      <p className="text-sm text-muted-foreground">{secData.findings.length} findings total</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-5 gap-4">
+                    {(["critical", "high", "medium", "low", "info"] as const).map((sev) => (
+                      <Card key={sev} className="p-4">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">{sev}</p>
+                        <p className={`text-2xl font-bold ${
+                          sev === "critical" ? "text-red-600" : sev === "high" ? "text-orange-600" : sev === "medium" ? "text-yellow-600" : sev === "low" ? "text-blue-600" : "text-gray-500"
+                        }`}>{secData.summary[sev] || 0}</p>
+                      </Card>
+                    ))}
+                  </div>
+
+                  {secData.findings.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-sm font-bold text-muted-foreground">Findings ({secData.findings.length})</p>
+                      <div className="rounded-xl border border-border/40 overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead className="bg-muted/50">
+                            <tr>
+                              <th className="text-left p-3 font-bold text-xs uppercase tracking-wider">Severity</th>
+                              <th className="text-left p-3 font-bold text-xs uppercase tracking-wider">Type</th>
+                              <th className="text-left p-3 font-bold text-xs uppercase tracking-wider">Title</th>
+                              <th className="text-left p-3 font-bold text-xs uppercase tracking-wider">Remediation</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {secData.findings.map((f: any, i: number) => (
+                              <tr key={i} className="border-t border-border/30">
+                                <td className="p-3">
+                                  <Badge variant="outline" className={`text-[10px] ${
+                                    f.severity === "critical" ? "border-red-500 text-red-600" :
+                                    f.severity === "high" ? "border-orange-500 text-orange-600" :
+                                    f.severity === "medium" ? "border-yellow-500 text-yellow-600" :
+                                    "border-blue-500 text-blue-600"
+                                  }`}>{f.severity}</Badge>
+                                </td>
+                                <td className="p-3 text-xs font-mono">{f.type}</td>
+                                <td className="p-3 text-xs font-medium">{f.title}</td>
+                                <td className="p-3 text-xs max-w-[300px] truncate">{f.remediation || "-"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-center text-muted-foreground py-8">No security data available for this run</p>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
+
+      {/* Action buttons for failed runs */}
+      {run && (run.status === "FAILED" || run.status === "ERROR") && (
+        <div className="flex items-center gap-3 mt-6">
+          <Dialog open={correlateDialogOpen} onOpenChange={setCorrelateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="rounded-xl">
+                <GitBranch className="mr-2 h-4 w-4" />
+                Correlate with Code
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl rounded-[2rem] border-border/40 bg-card/95 backdrop-blur-xl">
+              <DialogHeader>
+                <DialogTitle>Correlate Failure with Code Changes</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 mt-4">
+                <div className="space-y-2">
+                  <Label>Git Diff</Label>
+                  <Textarea
+                    value={correlateInput}
+                    onChange={(e) => setCorrelateInput(e.target.value)}
+                    placeholder="Paste your git diff here..."
+                    rows={10}
+                    className="font-mono text-xs"
+                  />
+                </div>
+                <Button onClick={handleCorrelate} disabled={correlating || !correlateInput.trim()}>
+                  {correlating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
+                  Analyze
+                </Button>
+                {correlateResult && (
+                  <Card className="p-4 mt-4">
+                    <p className="text-sm font-bold mb-2">Probable Cause</p>
+                    <p className="text-sm">{correlateResult.analysis || correlateResult.probableCause || JSON.stringify(correlateResult)}</p>
+                    {correlateResult.file && (
+                      <p className="text-xs font-mono mt-2 text-muted-foreground">
+                        {correlateResult.file}:{correlateResult.line} (confidence: {correlateResult.confidence || "N/A"})
+                      </p>
+                    )}
+                  </Card>
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="rounded-xl">
+                <UserPlus className="mr-2 h-4 w-4" />
+                Assign
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="rounded-[2rem] border-border/40 bg-card/95 backdrop-blur-xl">
+              <DialogHeader>
+                <DialogTitle>Assign Failure</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 mt-4">
+                <div className="space-y-2">
+                  <Label>Assignee</Label>
+                  <Input
+                    value={assignee}
+                    onChange={(e) => setAssignee(e.target.value)}
+                    placeholder="Team member name or email"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Note</Label>
+                  <Textarea
+                    value={assignNote}
+                    onChange={(e) => setAssignNote(e.target.value)}
+                    placeholder="Add context about the failure..."
+                    rows={3}
+                  />
+                </div>
+                <Button onClick={handleAssign} disabled={assigning || !assignee.trim()}>
+                  {assigning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Assign
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+      )}
+
+      {/* Comments Section */}
+      <Card className="mt-6">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <MessageSquare className="h-5 w-5" />
+            Comments
+          </CardTitle>
+          <Button variant="ghost" size="sm" onClick={loadComments} className="rounded-xl">
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {comments.length > 0 ? (
+            <div className="space-y-3">
+              {comments.map((c: any) => (
+                <div key={c.id} className="p-3 rounded-xl border border-border/40 bg-background/50">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-bold">{c.user?.name || c.user?.email || "Unknown"}</span>
+                    <span className="text-[10px] text-muted-foreground">{new Date(c.createdAt).toLocaleString()}</span>
+                  </div>
+                  <p className="text-sm">{c.content}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-4">No comments yet</p>
+          )}
+          <div className="flex gap-2">
+            <Input
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+              placeholder="Add a comment..."
+              className="rounded-xl"
+              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handlePostComment()}
+            />
+            <Button onClick={handlePostComment} disabled={postingComment || !newComment.trim()} size="icon" className="rounded-xl shrink-0">
+              {postingComment ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </DashboardShell>
   );
 }
