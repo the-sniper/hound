@@ -35,6 +35,10 @@ import {
   RefreshCw,
   GitCompare,
   Eye,
+  Zap,
+  Video,
+  Globe,
+  AlertTriangle,
 } from "lucide-react";
 import { formatDistanceToNow, formatDuration } from "@/lib/utils";
 
@@ -48,6 +52,8 @@ interface Run {
   startedAt: string | null;
   completedAt: string | null;
   createdAt: string;
+  videoUrl: string | null;
+  harUrl: string | null;
   test: {
     id: string;
     name: string;
@@ -62,6 +68,8 @@ interface StepResult {
   error: string | null;
   logs: unknown;
   aiResponse: unknown;
+  cacheHit?: boolean;
+  retryCount?: number;
   step: {
     id: string;
     orderIndex: number;
@@ -128,6 +136,43 @@ interface BaselineRun {
   status: string;
   createdAt: string;
   _count: { results: number };
+}
+
+interface HarEntry {
+  request: { method: string; url: string };
+  response: { status: number; content: { size: number; mimeType: string } };
+  time: number;
+  timings: { wait: number; receive: number };
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+}
+
+function formatMs(ms: number): string {
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  return `${(ms / 1000).toFixed(2)}s`;
+}
+
+function getStatusColor(status: number): string {
+  if (status >= 200 && status < 300) return "text-green-600";
+  if (status >= 300 && status < 400) return "text-yellow-600";
+  return "text-red-600";
+}
+
+function getContentType(mimeType: string): string {
+  if (mimeType.includes("json")) return "JSON";
+  if (mimeType.includes("html")) return "HTML";
+  if (mimeType.includes("css")) return "CSS";
+  if (mimeType.includes("javascript")) return "JS";
+  if (mimeType.includes("image")) return "Image";
+  if (mimeType.includes("font")) return "Font";
+  if (mimeType.includes("xml")) return "XML";
+  return mimeType.split("/").pop()?.toUpperCase() || "Other";
 }
 
 // Screenshot thumbnail component with error handling
@@ -252,6 +297,11 @@ export default function RunViewerPage() {
   const [selectedBaselineRunId, setSelectedBaselineRunId] = useState<string>("");
   const [comparing, setComparing] = useState(false);
   const [selectedComparison, setSelectedComparison] = useState<ComparisonResult | null>(null);
+
+  // Network HAR state
+  const [harEntries, setHarEntries] = useState<HarEntry[]>([]);
+  const [harLoading, setHarLoading] = useState(false);
+  const [harLoaded, setHarLoaded] = useState(false);
 
   useEffect(() => {
     loadRun();
@@ -382,6 +432,22 @@ export default function RunViewerPage() {
       alert("Failed to compare runs");
     }
     setComparing(false);
+  }
+
+  async function loadHarData() {
+    if (harLoaded || harLoading) return;
+    setHarLoading(true);
+    try {
+      const res = await fetch(`/api/runs/${runId}/har`);
+      if (res.ok) {
+        const data = await res.json();
+        setHarEntries(data?.log?.entries || []);
+      }
+    } catch (error) {
+      console.error("Failed to load HAR data:", error);
+    }
+    setHarLoading(false);
+    setHarLoaded(true);
   }
 
   function getStatusIcon(status: string) {
@@ -558,6 +624,18 @@ export default function RunViewerPage() {
           <TabsTrigger value="timeline">Step Timeline</TabsTrigger>
           <TabsTrigger value="screenshots">Screenshots</TabsTrigger>
           <TabsTrigger value="logs">Logs</TabsTrigger>
+          {run.videoUrl && (
+            <TabsTrigger value="video">
+              <Video className="h-4 w-4 mr-1" />
+              Video
+            </TabsTrigger>
+          )}
+          {run.harUrl && (
+            <TabsTrigger value="network" onClick={loadHarData}>
+              <Globe className="h-4 w-4 mr-1" />
+              Network
+            </TabsTrigger>
+          )}
           <TabsTrigger value="compare" onClick={loadBaselineRuns}>
             <GitCompare className="h-4 w-4 mr-1" />
             Compare
@@ -609,7 +687,7 @@ export default function RunViewerPage() {
                         </div>
 
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <Badge variant="outline" className="text-xs">
                               {getStepIcon(result.step.type)}
                               <span className="ml-1">{result.step.type}</span>
@@ -618,6 +696,18 @@ export default function RunViewerPage() {
                               <span className="text-xs text-muted-foreground">
                                 {formatDuration(result.duration)}
                               </span>
+                            )}
+                            {result.cacheHit && (
+                              <Badge className="bg-amber-50 text-amber-700 border border-amber-200 text-[10px] px-1.5 py-0 gap-1">
+                                <Zap className="h-3 w-3" />
+                                Cached
+                              </Badge>
+                            )}
+                            {(result.retryCount ?? 0) > 0 && (
+                              <Badge className="bg-orange-50 text-orange-700 border border-orange-200 text-[10px] px-1.5 py-0 gap-1">
+                                <RefreshCw className="h-3 w-3" />
+                                Retried &times;{result.retryCount}
+                              </Badge>
                             )}
                           </div>
                           <p className="font-medium mt-1">{result.step.description}</p>
@@ -777,6 +867,144 @@ export default function RunViewerPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {run.videoUrl && (
+          <TabsContent value="video">
+            <Card className="border-border/50 shadow-elegant rounded-[2rem] overflow-hidden">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Video className="h-5 w-5 text-primary" />
+                  Run Recording
+                </CardTitle>
+                <CardDescription>
+                  Full video recording of the test execution
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="rounded-xl overflow-hidden bg-black/5 border border-border/30">
+                  <video
+                    controls
+                    className="w-full rounded-lg"
+                    src={run.videoUrl}
+                  >
+                    Your browser does not support video playback.
+                  </video>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+
+        {run.harUrl && (
+          <TabsContent value="network">
+            <Card className="border-border/50 shadow-elegant rounded-[2rem] overflow-hidden">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Globe className="h-5 w-5 text-primary" />
+                  Network Requests
+                </CardTitle>
+                <CardDescription>
+                  HTTP request waterfall captured during the run
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {harLoading ? (
+                  <div className="flex items-center justify-center h-[300px]">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  </div>
+                ) : harEntries.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground">
+                    <Globe className="h-12 w-12 mb-4 opacity-40" />
+                    <p>No network requests captured</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {/* Summary row */}
+                    <div className="grid grid-cols-4 gap-3">
+                      <div className="bg-muted/50 border border-border/30 rounded-xl p-3">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">Requests</p>
+                        <p className="text-xl font-semibold mt-1">{harEntries.length}</p>
+                      </div>
+                      <div className="bg-muted/50 border border-border/30 rounded-xl p-3">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">Total Size</p>
+                        <p className="text-xl font-semibold mt-1">
+                          {formatBytes(harEntries.reduce((acc, e) => acc + (e.response.content.size || 0), 0))}
+                        </p>
+                      </div>
+                      <div className="bg-muted/50 border border-border/30 rounded-xl p-3">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">Total Time</p>
+                        <p className="text-xl font-semibold mt-1">
+                          {formatMs(harEntries.reduce((acc, e) => acc + (e.time || 0), 0))}
+                        </p>
+                      </div>
+                      <div className="bg-muted/50 border border-border/30 rounded-xl p-3">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">Slow (&gt;1s)</p>
+                        <p className="text-xl font-semibold mt-1 text-orange-600">
+                          {harEntries.filter((e) => e.time > 1000).length}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Request table */}
+                    <ScrollArea className="h-[calc(100vh-480px)]">
+                      <div className="rounded-xl border border-border/30 overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="bg-muted/50 border-b border-border/30">
+                              <th className="text-left px-4 py-2.5 font-semibold text-muted-foreground text-xs uppercase tracking-wider w-[70px]">Method</th>
+                              <th className="text-left px-4 py-2.5 font-semibold text-muted-foreground text-xs uppercase tracking-wider">URL</th>
+                              <th className="text-left px-4 py-2.5 font-semibold text-muted-foreground text-xs uppercase tracking-wider w-[70px]">Status</th>
+                              <th className="text-left px-4 py-2.5 font-semibold text-muted-foreground text-xs uppercase tracking-wider w-[70px]">Type</th>
+                              <th className="text-right px-4 py-2.5 font-semibold text-muted-foreground text-xs uppercase tracking-wider w-[80px]">Size</th>
+                              <th className="text-right px-4 py-2.5 font-semibold text-muted-foreground text-xs uppercase tracking-wider w-[90px]">Duration</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {harEntries.map((entry, i) => {
+                              const isSlow = entry.time > 1000;
+                              const urlObj = (() => { try { return new URL(entry.request.url); } catch { return null; } })();
+                              const displayUrl = urlObj ? urlObj.pathname + urlObj.search : entry.request.url;
+                              return (
+                                <tr
+                                  key={i}
+                                  className={`border-b border-border/10 transition-colors hover:bg-muted/30 ${isSlow ? "bg-orange-50/50" : ""}`}
+                                >
+                                  <td className="px-4 py-2">
+                                    <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0">
+                                      {entry.request.method}
+                                    </Badge>
+                                  </td>
+                                  <td className="px-4 py-2 font-mono text-xs truncate max-w-[400px]" title={entry.request.url}>
+                                    {displayUrl}
+                                  </td>
+                                  <td className={`px-4 py-2 font-semibold ${getStatusColor(entry.response.status)}`}>
+                                    {entry.response.status}
+                                  </td>
+                                  <td className="px-4 py-2 text-xs text-muted-foreground">
+                                    {getContentType(entry.response.content.mimeType)}
+                                  </td>
+                                  <td className="px-4 py-2 text-right text-xs text-muted-foreground tabular-nums">
+                                    {formatBytes(entry.response.content.size || 0)}
+                                  </td>
+                                  <td className="px-4 py-2 text-right tabular-nums">
+                                    <span className={`text-xs ${isSlow ? "text-orange-600 font-semibold" : "text-muted-foreground"}`}>
+                                      {isSlow && <AlertTriangle className="inline h-3 w-3 mr-1 -mt-0.5" />}
+                                      {formatMs(entry.time)}
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </ScrollArea>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
 
         {run.failureAnalysis && (
           <TabsContent value="analysis">

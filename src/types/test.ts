@@ -3,6 +3,7 @@ import type { StepType, TestStatus } from "@/generated/prisma";
 export type { StepType, TestStatus };
 
 export interface StepConfig {
+  [key: string]: unknown;
   url?: string;
   target?: string;
   value?: string;
@@ -17,6 +18,7 @@ export interface StepConfig {
   direction?: "up" | "down" | "left" | "right";
   amount?: number;
   optionValue?: string;
+  authStateName?: string;
 }
 
 export interface TestWithSteps {
@@ -25,6 +27,7 @@ export interface TestWithSteps {
   description: string | null;
   status: TestStatus;
   tags: string[];
+  continueOnFailure: boolean;
   projectId: string;
   createdAt: Date;
   updatedAt: Date;
@@ -35,6 +38,7 @@ export interface TestWithSteps {
     description: string;
     config: StepConfig;
     testId: string;
+    maxRetries: number;
   }[];
 }
 
@@ -56,6 +60,8 @@ export const STEP_TYPE_LABELS: Record<StepType, string> = {
   SELECT: "Select",
   PRESS_KEY: "Press Key",
   SCROLL: "Scroll",
+  SAVE_AUTH: "Save Auth",
+  LOAD_AUTH: "Load Auth",
 };
 
 export const STEP_TYPE_CATEGORIES = {
@@ -71,4 +77,5 @@ export const STEP_TYPE_CATEGORIES = {
   assertion: ["ASSERT_TEXT", "ASSERT_ELEMENT", "ASSERT_VISUAL"] as StepType[],
   ai: ["AI_CHECK", "AI_EXTRACT", "AI_ACTION"] as StepType[],
   advanced: ["JAVASCRIPT", "SCREENSHOT"] as StepType[],
+  auth: ["SAVE_AUTH", "LOAD_AUTH"] as StepType[],
 };

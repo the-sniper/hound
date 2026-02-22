@@ -1,23 +1,18 @@
-import { mkdir } from "fs/promises";
-import { join } from "path";
 import type { Page } from "playwright";
-
-const SCREENSHOT_DIR = join(process.cwd(), "public", "screenshots");
+import { getArtifactStore } from "@/lib/storage";
 
 export async function captureScreenshot(
   page: Page,
   runId: string,
   stepId: string
 ): Promise<string> {
-  const dir = join(SCREENSHOT_DIR, runId);
-  await mkdir(dir, { recursive: true });
-
+  const buffer = await page.screenshot({ fullPage: false });
   const filename = `${stepId}-${Date.now()}.png`;
-  const filepath = join(dir, filename);
+  const key = `screenshots/${runId}/${filename}`;
 
-  await page.screenshot({ path: filepath, fullPage: false });
-
-  return `/screenshots/${runId}/${filename}`;
+  const store = getArtifactStore();
+  await store.upload(key, buffer, "image/png");
+  return await store.getUrl(key);
 }
 
 export async function captureScreenshotBase64(page: Page): Promise<string> {

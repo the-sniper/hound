@@ -1,9 +1,10 @@
 generator client {
   provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -29,21 +30,23 @@ model Project {
   tests        Test[]
   runs         TestRun[]
   environments Environment[]
+  stepCaches   StepCache[]
+  authStates   AuthState[]
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
 }
 
 model Environment {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   name        String
   description String?
-  isDefault   Boolean  @default(false)
-  variables   String   @default("{}") // JSON string of key-value pairs
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  isDefault   Boolean   @default(false)
+  variables   Json      @default("{}")
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   projectId   String
   runs        TestRun[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@unique([projectId, name])
 }
@@ -66,17 +69,18 @@ enum Role {
 }
 
 model Test {
-  id          String     @id @default(cuid())
-  name        String
-  description String?
-  status      TestStatus @default(DRAFT)
-  tags        String     @default("")
-  steps       TestStep[]
-  runs        TestRun[]
-  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  projectId   String
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  id                String     @id @default(cuid())
+  name              String
+  description       String?
+  status            TestStatus @default(DRAFT)
+  tags              String     @default("")
+  continueOnFailure Boolean    @default(false)
+  steps             TestStep[]
+  runs              TestRun[]
+  project           Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId         String
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
 }
 
 enum TestStatus {
@@ -91,7 +95,8 @@ model TestStep {
   orderIndex  Int
   type        StepType
   description String
-  config      String       @default("{}")
+  config      Json         @default("{}")
+  maxRetries  Int          @default(0)
   test        Test         @relation(fields: [testId], references: [id], onDelete: Cascade)
   testId      String
   results     StepResult[]
@@ -118,6 +123,8 @@ enum StepType {
   SELECT
   PRESS_KEY
   SCROLL
+  SAVE_AUTH
+  LOAD_AUTH
 }
 
 model TestRun {
@@ -125,8 +132,11 @@ model TestRun {
   status          RunStatus    @default(PENDING)
   baseUrl         String
   duration        Int?
+  recordVideo     Boolean      @default(false)
+  videoUrl        String?
+  harUrl          String?
   results         StepResult[]
-  failureAnalysis String?
+  failureAnalysis Json?
   test            Test         @relation(fields: [testId], references: [id], onDelete: Cascade)
   testId          String
   project         Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -157,6 +167,8 @@ model StepResult {
   error         String?
   logs          String?
   aiResponse    String?
+  cacheHit      Boolean          @default(false)
+  retryCount    Int              @default(0)
   step          TestStep         @relation(fields: [stepId], references: [id], onDelete: Cascade)
   stepId        String
   run           TestRun          @relation(fields: [runId], references: [id], onDelete: Cascade)
@@ -174,12 +186,31 @@ enum StepResultStatus {
 
 model StepCache {
   id         String   @id @default(cuid())
+  cacheKey   String
   selector   String
-  attributes String   @default("{}")
+  branch     String?
+  attributes Json     @default("{}")
   screenshot String?
   step       TestStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
   stepId     String
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId  String
   expiresAt  DateTime
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+
+  @@index([projectId, cacheKey, branch])
+}
+
+model AuthState {
+  id        String   @id @default(cuid())
+  name      String
+  stateData Json
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, name])
 }
