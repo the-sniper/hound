@@ -248,6 +248,7 @@ export async function executeTestRun(options: ExecutorOptions): Promise<void> {
           projectId: options.projectId,
           branch: null,
           stepId: step.id,
+          runId,
           onCacheHit: () => {
             cacheHits.set(step.id, true);
           },
@@ -345,6 +346,7 @@ export async function executeTestRun(options: ExecutorOptions): Promise<void> {
               projectId: options.projectId,
               branch: null,
               stepId: step.id,
+              runId,
               onCacheHit: () => { cacheHits.set(step.id, true); },
               onCacheMiss: () => { cacheHits.set(step.id, false); },
             });

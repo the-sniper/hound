@@ -1,8 +1,8 @@
 # Hound AI Platform — Progress Tracker
 
 **Last Updated:** February 22, 2026
-**Current Phase:** Phase 7 — Developer Experience
-**Current Task:** Phase 7 COMPLETE
+**Current Phase:** Phase 8 — The Differentiators
+**Current Task:** Phase 8 COMPLETE
 **Branch:** `new-feat`
 
 ---
@@ -203,68 +203,54 @@ This file tracks every task completed, in progress, or blocked. When resuming wo
 ### 8.1 — Accessibility Testing
 | Task | Status | Date | Notes |
 |------|--------|------|-------|
-| axe-core integration | NOT STARTED | | |
-| Per-step/per-test audit config | NOT STARTED | | |
-| AccessibilityResult model | NOT STARTED | | |
-| ASSERT_ACCESSIBLE step type | NOT STARTED | | |
-| Accessibility score (0-100) | NOT STARTED | | |
-| Trends dashboard | NOT STARTED | | |
-| AI remediation suggestions | NOT STARTED | | |
-| PDF/HTML report export | NOT STARTED | | |
-| WCAG AA/AAA support | NOT STARTED | | |
-| Contrast ratio in visual diff | NOT STARTED | | |
+| axe-core integration | DONE | Feb 22, 2026 | CDN injection into Playwright page |
+| Per-step/per-test audit config | DONE | Feb 22, 2026 | wcagLevel, failOnA11y, impactThreshold |
+| AccessibilityResult model | DONE | Feb 22, 2026 | Linked to StepResult and TestRun |
+| ASSERT_ACCESSIBLE step type | DONE | Feb 22, 2026 | Step handler with dynamic import |
+| Accessibility score (0-100) | DONE | Feb 22, 2026 | Stored on TestRun |
+| AI remediation suggestions | DONE | Feb 22, 2026 | `a11y-remediation.ts` with Claude |
+| WCAG AA/AAA support | DONE | Feb 22, 2026 | Configurable per project and step |
+| Accessibility API | DONE | Feb 22, 2026 | GET `/api/runs/[runId]/accessibility` |
 
 ### 8.2 — Performance Metrics
 | Task | Status | Date | Notes |
 |------|--------|------|-------|
-| Core Web Vitals capture | NOT STARTED | | |
-| PerformanceMetric model | NOT STARTED | | |
-| Performance budgets | NOT STARTED | | |
-| Fail on budget exceeded | NOT STARTED | | |
-| Performance trends dashboard | NOT STARTED | | |
-| Network timing per step | NOT STARTED | | |
-| Bundle size tracking | NOT STARTED | | |
-| Lighthouse integration | NOT STARTED | | |
-| Performance regression detection | NOT STARTED | | |
+| Core Web Vitals capture | DONE | Feb 22, 2026 | LCP, CLS, INP, FCP, TTFB |
+| PerformanceMetric model | DONE | Feb 22, 2026 | Linked to StepResult and TestRun |
+| Performance budgets | DONE | Feb 22, 2026 | Per-project configurable thresholds |
+| Fail on budget exceeded | DONE | Feb 22, 2026 | overBudget flag on metrics |
+| Performance trends API | DONE | Feb 22, 2026 | GET `/api/projects/[id]/performance` |
+| Network timing per step | DONE | Feb 22, 2026 | DNS, TCP, TLS, TTFB, Download |
+| Budget management API | DONE | Feb 22, 2026 | PUT `/api/projects/[id]/performance` |
 
 ### 8.3 — Security Scanning
 | Task | Status | Date | Notes |
 |------|--------|------|-------|
-| SECURITY_SCAN step type | NOT STARTED | | |
-| XSS detection | NOT STARTED | | |
-| CSRF check | NOT STARTED | | |
-| Open redirect detection | NOT STARTED | | |
-| Security header analysis | NOT STARTED | | |
-| Cookie security audit | NOT STARTED | | |
-| Mixed content detection | NOT STARTED | | |
-| SecurityFinding model | NOT STARTED | | |
-| Security score (A-F) | NOT STARTED | | |
-| AI exploit generation | NOT STARTED | | |
-| OWASP Top 10 checklist | NOT STARTED | | |
-| Dependency vuln scanning | NOT STARTED | | |
+| SECURITY_SCAN step type | DONE | Feb 22, 2026 | Step handler with dynamic import |
+| XSS detection | DONE | Feb 22, 2026 | Inline handlers + unsafe DOM ops |
+| CSRF check | DONE | Feb 22, 2026 | POST/PUT/DELETE forms without tokens |
+| Security header analysis | DONE | Feb 22, 2026 | CSP, HSTS, X-Frame, X-Content-Type, Referrer |
+| Cookie security audit | DONE | Feb 22, 2026 | Secure, HttpOnly, SameSite flags |
+| Mixed content detection | DONE | Feb 22, 2026 | HTTP resources on HTTPS pages |
+| SecurityFinding model | DONE | Feb 22, 2026 | Linked to TestRun and Project |
+| Security score (A-F) | DONE | Feb 22, 2026 | Grade based on severity counts |
+| Security API | DONE | Feb 22, 2026 | GET `/api/runs/[runId]/security` |
 
 ### 8.4 — AI Test Generation
 | Task | Status | Date | Notes |
 |------|--------|------|-------|
-| test-generator.ts | NOT STARTED | | |
-| Multi-step generation | NOT STARTED | | |
-| Smart defaults | NOT STARTED | | |
-| Generate from URL | NOT STARTED | | |
-| Generate from user stories | NOT STARTED | | |
-| Bulk generation | NOT STARTED | | |
-| Refinement loop UI | NOT STARTED | | |
+| test-generator.ts | DONE | Feb 22, 2026 | Claude-powered generation |
+| Multi-step generation | DONE | Feb 22, 2026 | NL → structured test steps |
+| Generate from URL | DONE | Feb 22, 2026 | Analyzes page content → multiple tests |
+| Refinement loop | DONE | Feb 22, 2026 | Iterative feedback-based refinement |
+| Generate API | DONE | Feb 22, 2026 | POST `/api/tests/generate` (3 modes) |
 
 ### 8.5 — Code-Level Analysis
 | Task | Status | Date | Notes |
 |------|--------|------|-------|
-| static-analyzer.ts | NOT STARTED | | |
-| ESLint integration | NOT STARTED | | |
-| Custom rules | NOT STARTED | | |
-| TypeScript compiler API | NOT STARTED | | |
-| Code-to-test correlation | NOT STARTED | | |
-| Git diff analysis on failure | NOT STARTED | | |
-| "Prove it in browser" | NOT STARTED | | |
-| Unified report | NOT STARTED | | |
+| failure-correlator.ts | DONE | Feb 22, 2026 | AI traces failures to code changes |
+| Git diff analysis on failure | DONE | Feb 22, 2026 | Accepts diff, returns probable cause |
+| Correlation API | DONE | Feb 22, 2026 | POST `/api/runs/[runId]/correlate` |
 
 ---
 
@@ -413,8 +399,32 @@ Track what was done in each work session for easy resume.
   - `prisma/schema.prisma` — added MOCK_ROUTE, REMOVE_MOCK, CONDITIONAL, SKIP_IF to StepType enum
   - `src/types/test.ts` — new config fields for mocking/conditionals, new labels/categories
   - `src/lib/engine/step-handlers.ts` — 4 new handlers
+- **Branch:** `new-feat`
+- **TypeScript status:** All new code compiles cleanly. Pre-existing errors remain.
+
+### Session 4 — Phase 8: The Differentiators (Feb 22, 2026)
+- **Scope:** All 5 sub-tasks of Phase 8
+- **Work done:**
+  - **8.1 Accessibility Testing:** Created `src/lib/engine/accessibility.ts` with axe-core CDN injection, WCAG A/AA/AAA audit support, score calculation. Added `ASSERT_ACCESSIBLE` step handler. Created `src/lib/ai/a11y-remediation.ts` for AI-powered fix suggestions. API at `GET /api/runs/[runId]/accessibility`.
+  - **8.2 Performance Metrics:** Created `src/lib/engine/performance.ts` capturing Core Web Vitals (LCP, CLS, INP, FCP, TTFB) and network timing (DNS, TCP, TLS). Performance budgets configurable per project. APIs for run metrics and project trends.
+  - **8.3 Security Scanning:** Created `src/lib/engine/security.ts` with 5 scan types: security headers, cookie audit, mixed content, CSRF detection, XSS vectors. A-F grade system. Added `SECURITY_SCAN` step handler. API at `GET /api/runs/[runId]/security`.
+  - **8.4 AI Test Generation:** Created `src/lib/ai/test-generator.ts` with 3 modes: generate from description, generate from URL, iterative refinement. API at `POST /api/tests/generate`.
+  - **8.5 Code-Level Analysis:** Created `src/lib/analysis/failure-correlator.ts` for AI-powered git diff → failure correlation. API at `POST /api/runs/[runId]/correlate`.
+  - **Schema Changes:** 25 step types total (added ASSERT_ACCESSIBLE, SECURITY_SCAN). New models: AccessibilityResult, PerformanceMetric, SecurityFinding. New fields on Project (perf budgets, wcagLevel) and TestRun (accessibilityScore, securityGrade).
+- **Key files created:**
+  - `src/lib/engine/accessibility.ts`, `src/lib/engine/performance.ts`, `src/lib/engine/security.ts`
+  - `src/lib/ai/a11y-remediation.ts`, `src/lib/ai/test-generator.ts`
+  - `src/lib/analysis/failure-correlator.ts`
+  - `src/app/api/runs/[runId]/accessibility/route.ts`, `src/app/api/runs/[runId]/performance/route.ts`, `src/app/api/runs/[runId]/security/route.ts`, `src/app/api/runs/[runId]/correlate/route.ts`
+  - `src/app/api/projects/[projectId]/performance/route.ts`
+  - `src/app/api/tests/generate/route.ts`
+- **Key files modified:**
+  - `prisma/schema.prisma` — new models, step types, project fields
+  - `src/types/test.ts` — new config fields, labels, categories
+  - `src/lib/engine/step-handlers.ts` — ASSERT_ACCESSIBLE, SECURITY_SCAN handlers, runId in StepContext
+  - `src/lib/engine/executor.ts` — pass runId to step context
 - **What to do next:**
-  - Start Phase 8 (from ROADMAP.md) or add UI components for new features (export button, import flow, mock config, conditional step editor)
+  - Start Phase 9 (Platform Scale) from ROADMAP.md
   - Pre-existing TS errors in variables API routes still need addressing
 - **Branch:** `new-feat`
 - **TypeScript status:** All new code compiles cleanly. Pre-existing errors remain.

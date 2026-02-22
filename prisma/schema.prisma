@@ -22,18 +22,24 @@ model User {
 }
 
 model Project {
-  id           String          @id @default(cuid())
-  name         String
-  baseUrl      String
-  description  String?
-  members      ProjectMember[]
-  tests        Test[]
-  runs         TestRun[]
-  environments Environment[]
-  stepCaches   StepCache[]
-  authStates   AuthState[]
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
+  id                 String              @id @default(cuid())
+  name               String
+  baseUrl            String
+  description        String?
+  perfBudgetLcp      Int?
+  perfBudgetCls      Float?
+  perfBudgetInp      Int?
+  perfBudgetTtfb     Int?
+  wcagLevel          String              @default("AA")
+  members            ProjectMember[]
+  tests              Test[]
+  runs               TestRun[]
+  environments       Environment[]
+  stepCaches         StepCache[]
+  authStates         AuthState[]
+  securityFindings   SecurityFinding[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
 }
 
 model Environment {
@@ -129,29 +135,36 @@ enum StepType {
   REMOVE_MOCK
   CONDITIONAL
   SKIP_IF
+  ASSERT_ACCESSIBLE
+  SECURITY_SCAN
 }
 
 model TestRun {
-  id              String       @id @default(cuid())
-  status          RunStatus    @default(PENDING)
-  baseUrl         String
-  duration        Int?
-  recordVideo     Boolean      @default(false)
-  videoUrl        String?
-  harUrl          String?
-  results         StepResult[]
-  failureAnalysis Json?
-  test            Test         @relation(fields: [testId], references: [id], onDelete: Cascade)
-  testId          String
-  project         Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  projectId       String
-  environment     Environment? @relation(fields: [environmentId], references: [id])
-  environmentId   String?
-  user            User?        @relation(fields: [userId], references: [id])
-  userId          String?
-  startedAt       DateTime?
-  completedAt     DateTime?
-  createdAt       DateTime     @default(now())
+  id                   String                @id @default(cuid())
+  status               RunStatus             @default(PENDING)
+  baseUrl              String
+  duration             Int?
+  recordVideo          Boolean               @default(false)
+  videoUrl             String?
+  harUrl               String?
+  accessibilityScore   Int?
+  securityGrade        String?
+  results              StepResult[]
+  failureAnalysis      Json?
+  accessibilityResults AccessibilityResult[]
+  performanceMetrics   PerformanceMetric[]
+  securityFindings     SecurityFinding[]
+  test                 Test                  @relation(fields: [testId], references: [id], onDelete: Cascade)
+  testId               String
+  project              Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId            String
+  environment          Environment?          @relation(fields: [environmentId], references: [id])
+  environmentId        String?
+  user                 User?                 @relation(fields: [userId], references: [id])
+  userId               String?
+  startedAt            DateTime?
+  completedAt          DateTime?
+  createdAt            DateTime              @default(now())
 }
 
 enum RunStatus {
@@ -164,20 +177,22 @@ enum RunStatus {
 }
 
 model StepResult {
-  id            String           @id @default(cuid())
-  status        StepResultStatus @default(PENDING)
-  duration      Int?
-  screenshotUrl String?
-  error         String?
-  logs          String?
-  aiResponse    String?
-  cacheHit      Boolean          @default(false)
-  retryCount    Int              @default(0)
-  step          TestStep         @relation(fields: [stepId], references: [id], onDelete: Cascade)
-  stepId        String
-  run           TestRun          @relation(fields: [runId], references: [id], onDelete: Cascade)
-  runId         String
-  createdAt     DateTime         @default(now())
+  id                   String                @id @default(cuid())
+  status               StepResultStatus      @default(PENDING)
+  duration             Int?
+  screenshotUrl        String?
+  error                String?
+  logs                 String?
+  aiResponse           String?
+  cacheHit             Boolean               @default(false)
+  retryCount           Int                   @default(0)
+  accessibilityResults AccessibilityResult[]
+  performanceMetrics   PerformanceMetric[]
+  step                 TestStep              @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  stepId               String
+  run                  TestRun               @relation(fields: [runId], references: [id], onDelete: Cascade)
+  runId                String
+  createdAt            DateTime              @default(now())
 }
 
 enum StepResultStatus {
@@ -217,4 +232,57 @@ model AuthState {
   updatedAt DateTime @updatedAt
 
   @@unique([projectId, name])
+}
+
+model AccessibilityResult {
+  id            String   @id @default(cuid())
+  ruleId        String
+  impact        String
+  wcagCriteria  String
+  description   String
+  target        String
+  html          String?
+  remediation   String?
+  stepResult    StepResult @relation(fields: [stepResultId], references: [id], onDelete: Cascade)
+  stepResultId  String
+  run           TestRun    @relation(fields: [runId], references: [id], onDelete: Cascade)
+  runId         String
+  createdAt     DateTime   @default(now())
+
+  @@index([runId])
+}
+
+model PerformanceMetric {
+  id            String     @id @default(cuid())
+  name          String
+  value         Float
+  unit          String     @default("ms")
+  budgetMax     Float?
+  overBudget    Boolean    @default(false)
+  stepResult    StepResult @relation(fields: [stepResultId], references: [id], onDelete: Cascade)
+  stepResultId  String
+  run           TestRun    @relation(fields: [runId], references: [id], onDelete: Cascade)
+  runId         String
+  createdAt     DateTime   @default(now())
+
+  @@index([runId, name])
+}
+
+model SecurityFinding {
+  id            String   @id @default(cuid())
+  type          String
+  severity      String
+  title         String
+  description   String
+  evidence      String?
+  remediation   String?
+  location      String?
+  run           TestRun  @relation(fields: [runId], references: [id], onDelete: Cascade)
+  runId         String
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId     String
+  createdAt     DateTime @default(now())
+
+  @@index([runId])
+  @@index([projectId, type])
 }

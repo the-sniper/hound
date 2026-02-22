@@ -52,6 +52,7 @@ interface StepContext {
   projectId?: string;
   branch?: string | null;
   stepId?: string;
+  runId?: string;
   onCacheHit?: (target: string) => void;
   onCacheMiss?: (target: string) => void;
 }
@@ -473,5 +474,60 @@ export const stepHandlers: Record<string, StepHandler> = {
     }
 
     return { logs: [`Step not skipped: condition "${conditionType}" was false`] };
+  },
+
+  ASSERT_ACCESSIBLE: async (page, config, ctx) => {
+    const { runAccessibilityAudit, saveAccessibilityResults } = await import("./accessibility");
+
+    const wcagLevel = config.wcagLevel ?? "AA";
+    const failOnA11y = config.failOnA11y !== false;
+    const impactThreshold = config.a11yImpactThreshold ?? "serious";
+
+    const audit = await runAccessibilityAudit(page, wcagLevel);
+
+    if (ctx?.runId && ctx?.stepId) {
+      await saveAccessibilityResults(ctx.runId, ctx.stepId, audit);
+    }
+
+    const impactLevels = ["minor", "moderate", "serious", "critical"];
+    const thresholdIndex = impactLevels.indexOf(impactThreshold);
+    const criticalViolations = audit.violations.filter(
+      (v) => impactLevels.indexOf(v.impact) >= thresholdIndex
+    );
+
+    if (failOnA11y && criticalViolations.length > 0) {
+      throw new Error(
+        `Accessibility: ${criticalViolations.length} ${impactThreshold}+ violations found. ` +
+        `Score: ${audit.score}/100. Top: ${criticalViolations.slice(0, 3).map((v) => v.ruleId).join(", ")}`
+      );
+    }
+
+    return {
+      logs: [`A11y audit: score ${audit.score}/100, ${audit.violationCount} violations, ${audit.passCount} passes`],
+    };
+  },
+
+  SECURITY_SCAN: async (page, config, ctx) => {
+    const { runSecurityScan, saveSecurityFindings, calculateSecurityGrade } =
+      await import("./security");
+
+    const scanTypes = config.scanTypes as string[] | undefined;
+    const findings = await runSecurityScan(page, scanTypes);
+
+    if (ctx?.runId && ctx?.projectId) {
+      await saveSecurityFindings(ctx.runId, ctx.projectId, findings);
+    }
+
+    const grade = calculateSecurityGrade(findings);
+
+    if (findings.some((f) => f.severity === "critical")) {
+      throw new Error(
+        `Security scan: Grade ${grade}. ${findings.length} findings including critical issues.`
+      );
+    }
+
+    return {
+      logs: [`Security scan: Grade ${grade}, ${findings.length} findings`],
+    };
   },
 };

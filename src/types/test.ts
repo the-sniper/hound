@@ -32,6 +32,11 @@ export interface StepConfig {
   skipCondition?: string;
   skipConditionType?: "element_exists" | "text_contains" | "url_matches" | "variable_equals";
   skipConditionValue?: string;
+  wcagLevel?: "A" | "AA" | "AAA";
+  failOnA11y?: boolean;
+  a11yImpactThreshold?: "minor" | "moderate" | "serious" | "critical";
+  scanTypes?: string[];
+  securityPayloads?: string[];
 }
 
 export interface TestWithSteps {
@@ -79,6 +84,8 @@ export const STEP_TYPE_LABELS: Record<StepType, string> = {
   REMOVE_MOCK: "Remove Mock",
   CONDITIONAL: "Conditional",
   SKIP_IF: "Skip If",
+  ASSERT_ACCESSIBLE: "Assert Accessible",
+  SECURITY_SCAN: "Security Scan",
 };
 
 export const STEP_TYPE_CATEGORIES = {
@@ -97,4 +104,5 @@ export const STEP_TYPE_CATEGORIES = {
   auth: ["SAVE_AUTH", "LOAD_AUTH"] as StepType[],
   mocking: ["MOCK_ROUTE", "REMOVE_MOCK"] as StepType[],
   flow: ["CONDITIONAL", "SKIP_IF"] as StepType[],
+  quality: ["ASSERT_ACCESSIBLE", "SECURITY_SCAN"] as StepType[],
 };
