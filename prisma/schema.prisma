@@ -17,6 +17,8 @@ model User {
   openaiKey    String?
   projects     ProjectMember[]
   runs         TestRun[]
+  comments     Comment[]
+  activityLogs ActivityLog[]
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
 }
@@ -38,6 +40,11 @@ model Project {
   stepCaches         StepCache[]
   authStates         AuthState[]
   securityFindings   SecurityFinding[]
+  schedules          Schedule[]
+  webhooks           Webhook[]
+  comments           Comment[]
+  activityLogs       ActivityLog[]
+  plugins            ProjectPlugin[]
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 }
@@ -285,4 +292,100 @@ model SecurityFinding {
 
   @@index([runId])
   @@index([projectId, type])
+}
+
+model Schedule {
+  id            String         @id @default(cuid())
+  name          String
+  cronExpression String
+  enabled       Boolean        @default(true)
+  timezone      String         @default("UTC")
+  testIds       Json           @default("[]")
+  environmentId String?
+  region        String?
+  lastRunAt     DateTime?
+  nextRunAt     DateTime?
+  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId     String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([projectId])
+  @@index([enabled, nextRunAt])
+}
+
+model Webhook {
+  id         String   @id @default(cuid())
+  name       String
+  url        String
+  events     Json     @default("[\"run_failed\"]")
+  headers    Json     @default("{}")
+  enabled    Boolean  @default(true)
+  secret     String?
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId  String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([projectId])
+}
+
+model Comment {
+  id         String   @id @default(cuid())
+  content    String
+  targetType String
+  targetId   String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId  String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([targetType, targetId])
+  @@index([projectId])
+}
+
+model ActivityLog {
+  id         String   @id @default(cuid())
+  action     String
+  entityType String
+  entityId   String
+  metadata   Json     @default("{}")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId  String
+  createdAt  DateTime @default(now())
+
+  @@index([projectId])
+  @@index([userId])
+}
+
+model PluginDefinition {
+  id          String          @id @default(cuid())
+  name        String          @unique
+  version     String
+  description String?
+  author      String?
+  category    String
+  entrypoint  String
+  configSchema Json           @default("{}")
+  installs    ProjectPlugin[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+model ProjectPlugin {
+  id         String           @id @default(cuid())
+  enabled    Boolean          @default(true)
+  config     Json             @default("{}")
+  plugin     PluginDefinition @relation(fields: [pluginId], references: [id], onDelete: Cascade)
+  pluginId   String
+  project    Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId  String
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  @@unique([pluginId, projectId])
 }
