@@ -1,9 +1,9 @@
 # Hound AI Platform — Progress Tracker
 
 **Last Updated:** February 22, 2026
-**Current Phase:** Phase 9 — Platform Scale
-**Current Task:** Phase 9 COMPLETE
-**Branch:** `new-feat`
+**Current Phase:** Phase 10 — Next-Generation Testing Experience
+**Current Task:** Phase 10.1 DONE — Live Browser View
+**Branch:** `main`
 
 ---
 
@@ -445,6 +445,206 @@ Track what was done in each work session for easy resume.
 - **All roadmap phases complete (6-9). The platform is feature-complete.**
 - **Branch:** `new-feat`
 - **TypeScript status:** All new code compiles cleanly. Pre-existing errors remain.
+
+---
+
+## Phase 10: Next-Generation Testing Experience
+
+### 10.1 — Live Browser View (Foundation) — DONE
+| Task | Status | Date | Notes |
+|------|--------|------|-------|
+| Create `src/lib/engine/screencast.ts` — CDP screencast manager | DONE | Feb 22, 2026 | ScreencastManager class with start/stop, frame callbacks, JPEG quality 65, configurable FPS (default 15, max 30) via everyNthFrame |
+| Create `src/lib/ws/server.ts` — WebSocket frame streaming server | DONE | Feb 22, 2026 | Room-based connections keyed by runId, binary frame transmission, 30s heartbeat, auto-cleanup on disconnect |
+| Create `src/lib/ws/types.ts` — WebSocket message protocol | DONE | Feb 22, 2026 | Message types: frame, cursor_move, click_indicator, element_highlight, step_info, error, connection_ack, heartbeat, screencast_started/stopped. Binary header protocol (12 bytes) |
+| Create `src/lib/engine/live-frame-bus.ts` — frame event bus | DONE | Feb 22, 2026 | EventEmitter-based bus bridging screencast to WS and SSE consumers. emitFrame/onFrame, emitOverlay/onOverlay, cleanupRun |
+| Modify executor.ts — integrate screencast into test execution | DONE | Feb 22, 2026 | Start screencast when `liveView: true`, emit element highlights before CLICK/TYPE/HOVER/SELECT/PRESS_KEY/SCROLL, emit click indicators, emit step info |
+| Modify types/run.ts — add live view event types | DONE | Feb 22, 2026 | Added screencast_started, screencast_stopped, element_highlight to RunEvent type |
+| Create `LiveBrowserView.tsx` — canvas-based viewer component | DONE | Feb 22, 2026 | Canvas rendering via createImageBitmap, WebSocket binary frames, SSE fallback, connection status, FPS counter, reconnection logic |
+| Create `BrowserOverlay.tsx` — cursor trail, click indicators, highlights | DONE | Feb 22, 2026 | Framer Motion animations: cursor dot with ping, expanding click ripples, element bounding boxes with labels, step info badge |
+| Create `BrowserToolbar.tsx` — zoom, FPS, screenshot controls | DONE | Feb 22, 2026 | Zoom in/out/reset, FPS display, screenshot capture, fullscreen toggle, connection status badge |
+| Add `liveView` flag to POST /api/runs | DONE | Feb 22, 2026 | Added to zod schema and passed to executeTestRun |
+| Create WebSocket server via instrumentation hook | DONE | Feb 22, 2026 | src/instrumentation.ts starts WS server on port 3001 when Next.js boots (Node.js runtime) |
+| Integrate into run viewer page as "Live" tab | DONE | Feb 22, 2026 | New "Live" tab with Monitor icon, visible when run is RUNNING/PENDING, contains LiveBrowserView + BrowserOverlay + BrowserToolbar |
+| Add SSE fallback for base64 JPEG frames | DONE | Feb 22, 2026 | GET /api/runs/[runId]/live streams frames + overlay events over SSE with 10min timeout |
+
+### 10.2 — Interactive Recording (Record from Live View)
+| Task | Status | Date | Notes |
+|------|--------|------|-------|
+| Create `src/lib/engine/recorder.ts` — recording session manager | NOT STARTED | | Start/stop sessions, action dedup, session state |
+| Create `src/lib/engine/input-forwarder.ts` — user input → browser | NOT STARTED | | CDP Input.dispatchMouseEvent/KeyEvent, coordinate translation |
+| Create `src/lib/engine/action-recognizer.ts` — raw events → steps | NOT STARTED | | Click/type/navigate/select/scroll/hover/keypress recognition |
+| Create `src/lib/ai/step-refiner.ts` — AI post-processing | NOT STARTED | | Optimize selectors, add waits/assertions, merge steps, generate descriptions |
+| Create `POST /api/recorder/start` — start recording session | NOT STARTED | | Launch browser, navigate, start screencast |
+| Create `POST /api/recorder/action` — forward user actions | NOT STARTED | | Forward to browser via CDP, return recognized step |
+| Create `POST /api/recorder/stop` — stop and save test | NOT STARTED | | Finalize steps, AI refinement, save to DB |
+| Create `GET /api/recorder/session/[sessionId]` — session state | NOT STARTED | | Current steps, browser status |
+| Create `RecorderPanel.tsx` — main recording UI | NOT STARTED | | Split layout: browser + step list, controls |
+| Create `StepPreview.tsx` — step card in recorder | NOT STARTED | | Inline edit, delete, reorder |
+| Create `RecorderToolbar.tsx` — recording controls | NOT STARTED | | Record/pause/stop, timer, step count, quick-add buttons |
+| Wire up recorder page at `/projects/[id]/tests/record` | NOT STARTED | | Full page with URL input and recording UI |
+
+### 10.3 — Pause & Inspect Debug Mode
+| Task | Status | Date | Notes |
+|------|--------|------|-------|
+| Modify executor.ts — add ExecutionController (pause/resume/abort/skip) | NOT STARTED | | Promise gate pattern, global map by runId |
+| Create `POST /api/runs/[runId]/control` — execution control API | NOT STARTED | | pause, resume, abort, skip, inject actions |
+| Create `GET /api/runs/[runId]/inspect` — page inspection API | NOT STARTED | | a11y tree, DOM, console, network, storage, screenshot |
+| Create `DebugPanel.tsx` — debug tools sidebar | NOT STARTED | | DOM inspector, a11y tree, console, network, storage tabs |
+| Create `DebugToolbar.tsx` — execution controls | NOT STARTED | | Pause/resume/abort/skip/step-over/inject buttons |
+| Add keyboard shortcuts (Space, N, S) | NOT STARTED | | Pause/resume, next step, skip |
+
+### 10.4 — AI Co-Pilot Chat
+| Task | Status | Date | Notes |
+|------|--------|------|-------|
+| Create `src/lib/ai/copilot-agent.ts` — AI co-pilot with page context | NOT STARTED | | Multi-turn chat with page awareness, action suggestions |
+| Create `POST /api/runs/[runId]/copilot` — co-pilot chat API | NOT STARTED | | Message → AI response with optional action |
+| Create `CopilotChat.tsx` — chat sidebar component | NOT STARTED | | Messages, action cards, quick actions, context indicators |
+| Add conversation persistence per run | NOT STARTED | | Save chat history to DB |
+
+### 10.5 — Test Impact Analysis
+| Task | Status | Date | Notes |
+|------|--------|------|-------|
+| Create `src/lib/analysis/impact-analyzer.ts` — impact analysis engine | NOT STARTED | | Diff parsing, import chain, route mapping, test scoring |
+| Create `POST /api/projects/[projectId]/impact` — impact analysis API | NOT STARTED | | Diff/commit input → affected tests output |
+| Create `POST /api/projects/[projectId]/impact/run` — analyze and run | NOT STARTED | | One-call impact analysis + execution |
+| Add GitHub webhook handler for PR events | NOT STARTED | | Auto-run on PR open/sync, post PR comment |
+| Create `ImpactGraph.tsx` — visual dependency graph | NOT STARTED | | Files → components → pages → tests, interactive |
+| Add test → URL mapping from historical runs | NOT STARTED | | Build coverage map over time |
+| Add project settings for git repo integration | NOT STARTED | | Repo URL, access token |
+
+### 10.6 — Chaos & Resilience Testing
+| Task | Status | Date | Notes |
+|------|--------|------|-------|
+| Add chaos step types to schema | NOT STARTED | | THROTTLE_NETWORK, BLOCK_REQUEST, INJECT_LATENCY, SIMULATE_ERROR, RESTORE_NETWORK |
+| Create `src/lib/engine/chaos.ts` — chaos injection engine | NOT STARTED | | CDP network emulation, route blocking, latency injection, error simulation |
+| Add step handlers for chaos types | NOT STARTED | | 5 new handlers |
+| Create chaos step config UI | NOT STARTED | | Condition/preset selector, URL pattern, error code |
+| Create `ChaosPresets.tsx` — preset scenario selector | NOT STARTED | | Mobile 3G, Offline, API Failure, High Latency |
+| Add "Resilience Report" to run results | NOT STARTED | | Chaos conditions per step, resilience grade |
+
+### 10.7 — Production Error → Test Generation
+| Task | Status | Date | Notes |
+|------|--------|------|-------|
+| Create `src/lib/integrations/sentry.ts` — Sentry webhook handler | NOT STARTED | | Parse event payload, extract breadcrumbs, map to steps |
+| Create `src/lib/integrations/datadog.ts` — Datadog webhook handler | NOT STARTED | | Parse event payload, session replay extraction |
+| Create `src/lib/ai/error-to-test-generator.ts` — AI error → test | NOT STARTED | | Error context → structured test steps |
+| Create Sentry webhook endpoint | NOT STARTED | | POST /api/integrations/sentry |
+| Create Datadog webhook endpoint | NOT STARTED | | POST /api/integrations/datadog |
+| Create `ErrorTestQueue.tsx` — generated test review queue | NOT STARTED | | Approve, edit, dismiss error-generated tests |
+| Add project settings for error monitoring integration | NOT STARTED | | Sentry DSN, Datadog API key |
+
+### 10.8 — Test Coverage Heatmap
+| Task | Status | Date | Notes |
+|------|--------|------|-------|
+| Create `src/lib/analysis/coverage-tracker.ts` — element tracker | NOT STARTED | | Record element interactions during execution |
+| Add CoverageData model to Prisma schema | NOT STARTED | | projectId, pageUrl, selector, interactionCount, testIds |
+| Create coverage data API | NOT STARTED | | GET per-page, GET summary, POST generate |
+| Create `CoverageHeatmap.tsx` — visual overlay component | NOT STARTED | | Screenshot + colored overlay boxes, click tooltips |
+| Create `CoverageReport.tsx` — summary dashboard | NOT STARTED | | Per-page bars, most/least tested, trends |
+| Modify executor to emit coverage events | NOT STARTED | | Track element interactions per step |
+
+### 10.9 — Multi-Browser Split View
+| Task | Status | Date | Notes |
+|------|--------|------|-------|
+| Modify browser-pool.ts — support Firefox/WebKit | NOT STARTED | | getFirefoxBrowser(), getWebkitBrowser() |
+| Create `cross-browser-executor.ts` — parallel execution | NOT STARTED | | Lockstep execution, per-browser screenshots, comparison |
+| Create `SplitBrowserView.tsx` — side-by-side viewer | NOT STARTED | | 2-3 live views, sync scroll, diff overlay |
+| Create cross-browser comparison report | NOT STARTED | | Per-step screenshot diff, consistency score |
+| Add `browsers` option to run creation API | NOT STARTED | | Array of browser engines |
+
+### 10.10 — Collaborative Live Sessions
+| Task | Status | Date | Notes |
+|------|--------|------|-------|
+| Extend WebSocket server with room management | NOT STARTED | | Multi-user rooms, per-user cursor tracking |
+| Create `collaboration.ts` — collaboration layer | NOT STARTED | | Presence, cursors, annotations, permissions |
+| Create `CollaborationOverlay.tsx` — multi-user cursors | NOT STARTED | | Colored cursors with name labels, pinned annotations |
+| Create `SessionChat.tsx` — in-session chat | NOT STARTED | | Messages, screenshot sharing, @mentions |
+| Add shareable session links | NOT STARTED | | Token-based session sharing |
+
+---
+
+### Session 6 — February 22, 2026 (Phase 10 Planning)
+- **Duration:** ~30 minutes
+- **What was done:**
+  - Full codebase exploration and architecture review
+  - Competitive analysis for next-generation features
+  - Brainstormed 10 new features for Phase 10:
+    1. **Live Browser View** — real-time CDP screencast streaming via WebSocket
+    2. **Interactive Recording** — record tests by interacting with live browser in dashboard (replaces deferred Browser Extension)
+    3. **Pause & Inspect Debug Mode** — interactive test debugger with page inspection
+    4. **AI Co-Pilot Chat** — conversational AI alongside live test execution
+    5. **Test Impact Analysis** — git diff → affected tests with dependency graph
+    6. **Chaos & Resilience Testing** — network throttling, error injection, resilience grading
+    7. **Production Error → Test Generation** — Sentry/Datadog webhook → auto-generated tests
+    8. **Test Coverage Heatmap** — visual element coverage overlay
+    9. **Multi-Browser Split View** — side-by-side cross-browser live streaming
+    10. **Collaborative Live Sessions** — shared sessions with cursors and chat
+  - Detailed technical architecture for each feature including:
+    - CDP screencast for frame streaming
+    - WebSocket server for binary frame transport
+    - Input forwarding via CDP Input.dispatch* for recording
+    - Action recognition engine (raw DOM events → structured test steps)
+    - AI step refinement (selector optimization, assertion suggestion)
+    - Execution controller pattern (pause/resume via Promise gate)
+    - Impact analysis via import chain + route + historical URL mapping
+  - Updated ROADMAP.md with complete Phase 10 (10 sub-phases, 100+ implementation tasks)
+  - Updated PROGRESS.md with tracking tables for all Phase 10 tasks
+  - Updated competitive moat table with 10 new differentiators
+- **What to do next:**
+  - Start **10.1 Live Browser View** (foundation for 10.2, 10.3, 10.4, 10.9, 10.10)
+  - Key first steps: `screencast.ts` (CDP manager) → `ws/server.ts` (WebSocket) → `LiveBrowserView.tsx` (canvas renderer)
+  - Install `ws` package for WebSocket server
+  - Independent features (10.5, 10.6, 10.7, 10.8) can be parallelized
+- **Branch:** `main`
+- **Key files modified:**
+  - `ROADMAP.md` — Phase 10 added (10 sub-phases)
+  - `PROGRESS.md` — Phase 10 tracking tables, session log
+
+### Session 7 — February 22, 2026 (Phase 10.1: Live Browser View)
+- **Duration:** ~45 minutes
+- **What was done:**
+  - Completed **Phase 10.1 — Live Browser View** (13 tasks, all DONE)
+  - **Transport Layer:**
+    - Created `src/lib/ws/types.ts` — Full WebSocket message protocol with 10 message types, binary frame header protocol (12 bytes: width, height, timestamp), client/server message unions
+    - Created `src/lib/engine/live-frame-bus.ts` — EventEmitter-based bus bridging screencast frames to both WebSocket and SSE consumers, with per-run cleanup
+    - Created `src/lib/ws/server.ts` — Room-based WebSocket server using `ws` package, binary frame broadcast, 30s heartbeat, auto-cleanup on disconnect, viewer count tracking
+  - **Engine Integration:**
+    - Created `src/lib/engine/screencast.ts` — `ScreencastManager` class wrapping CDP `Page.startScreencast`, configurable FPS/quality/resolution, overlay event emission (cursor, click, highlight, step info)
+    - Modified `src/lib/engine/executor.ts` — Added `liveView` option, screencast start/stop lifecycle, element highlight emission before interactive steps (CLICK, TYPE, HOVER, SELECT, PRESS_KEY, SCROLL), click indicators after CLICK steps, step info overlay events
+    - Modified `src/types/run.ts` — Added `screencast_started`, `screencast_stopped`, `element_highlight` to RunEvent type union
+    - Modified `src/app/api/runs/route.ts` — Added `liveView` flag to zod schema, passed to executor
+  - **Server Infrastructure:**
+    - Created `src/instrumentation.ts` — Next.js instrumentation hook that starts WebSocket server on port 3001 when Node.js runtime boots
+    - Modified `next.config.ts` — Enabled instrumentationHook, added `ws` to serverExternalPackages
+    - Created `src/app/api/runs/[runId]/live/route.ts` — SSE fallback streaming base64 JPEG frames + overlay events when WebSocket unavailable
+  - **Frontend Components:**
+    - Created `src/components/live-browser/LiveBrowserView.tsx` — Canvas-based frame renderer with WebSocket binary frame support, SSE fallback, connection status, FPS counter, reconnection logic (max 10 attempts), frame capture API via forwardRef
+    - Created `src/components/live-browser/BrowserOverlay.tsx` — Framer Motion animated overlays: cursor dot with ping animation, expanding click ripples, element bounding boxes with labels, step info badge with status colors
+    - Created `src/components/live-browser/BrowserToolbar.tsx` — Zoom controls (25%-200%), FPS display, screenshot capture, fullscreen toggle, connection status badge with live indicator
+  - **Run Viewer Integration:**
+    - Added "Live" tab to run viewer page (visible when run is RUNNING/PENDING) with Monitor icon
+    - Tab content renders LiveBrowserView + BrowserOverlay + BrowserToolbar with zoom transform
+    - Screenshot capture downloads PNG, fullscreen toggle via Fullscreen API
+  - **Dependencies Added:** `ws`, `@types/ws`, `tsx`
+- **What to do next:**
+  - Start **10.2 Interactive Recording** (builds on Live Browser View)
+  - OR start independent features: **10.5 Test Impact Analysis**, **10.6 Chaos Testing**, **10.7 Error → Test Generation**, **10.8 Coverage Heatmap**
+- **Branch:** `new-feat`
+- **Key files created:**
+  - `src/lib/ws/types.ts`, `src/lib/ws/server.ts`
+  - `src/lib/engine/live-frame-bus.ts`, `src/lib/engine/screencast.ts`
+  - `src/components/live-browser/LiveBrowserView.tsx`, `src/components/live-browser/BrowserOverlay.tsx`, `src/components/live-browser/BrowserToolbar.tsx`
+  - `src/instrumentation.ts`
+  - `src/app/api/runs/[runId]/live/route.ts`
+- **Key files modified:**
+  - `src/lib/engine/executor.ts` — liveView option, screencast lifecycle, overlay events
+  - `src/app/api/runs/route.ts` — liveView flag
+  - `src/types/run.ts` — new event types
+  - `next.config.ts` — instrumentation + ws externals
+  - `src/app/(dashboard)/projects/[projectId]/tests/[testId]/runs/[runId]/page.tsx` — Live tab
+  - `package.json` — ws, @types/ws, tsx dependencies
+  - `PROGRESS.md` — Phase 10.1 tasks marked DONE, session log
+- **TypeScript status:** All new code compiles cleanly. No new linter errors introduced.
 
 ---
 

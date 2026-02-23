@@ -347,6 +347,7 @@ export default function TestEditorPage() {
             selectedEnvironmentId && selectedEnvironmentId !== "none"
               ? selectedEnvironmentId
               : undefined,
+          liveView: true,
         }),
       });
 

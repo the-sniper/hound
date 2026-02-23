@@ -51,7 +51,10 @@ export interface RunEvent {
     | "step_retry"
     | "run_complete"
     | "run_error"
-    | "screenshot";
+    | "screenshot"
+    | "screencast_started"
+    | "screencast_stopped"
+    | "element_highlight";
   runId: string;
   stepId?: string;
   status?: StepResultStatus;

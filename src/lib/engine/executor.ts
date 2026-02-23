@@ -7,8 +7,14 @@ import { captureScreenshot } from "./screenshot";
 import { runEventBus } from "./events";
 import { analyzeFailure } from "@/lib/ai/failure-agent";
 import { suggestRecovery, type RecoveryAction } from "@/lib/ai/recovery-agent";
+import { ScreencastManager } from "./screencast";
+import { liveFrameBus } from "./live-frame-bus";
 import { db } from "@/lib/db";
 import type { StepConfig } from "@/types/test";
+
+const INTERACTIVE_STEP_TYPES = new Set([
+  "CLICK", "TYPE", "HOVER", "SELECT", "PRESS_KEY", "SCROLL",
+]);
 
 interface ExecutorOptions {
   runId: string;
@@ -18,6 +24,7 @@ interface ExecutorOptions {
   environmentId?: string;
   recordVideo?: boolean;
   recordHar?: boolean;
+  liveView?: boolean;
 }
 
 /**
@@ -204,6 +211,17 @@ export async function executeTestRun(options: ExecutorOptions): Promise<void> {
     status: string;
   }[] = [];
 
+  let screencast: ScreencastManager | null = null;
+  if (options.liveView) {
+    screencast = new ScreencastManager({ runId, fps: 15, quality: 65 });
+    try {
+      await screencast.start(page);
+    } catch (err) {
+      console.error("Failed to start screencast:", err);
+      screencast = null;
+    }
+  }
+
   try {
     for (const step of test.steps) {
       const stepStart = Date.now();
@@ -222,6 +240,30 @@ export async function executeTestRun(options: ExecutorOptions): Promise<void> {
 
       // Apply variable substitution to step config
       config = substituteVariablesInConfig(config, variables);
+
+      screencast?.emitStepInfo(step.id, step.description, step.type, "running");
+
+      if (screencast && INTERACTIVE_STEP_TYPES.has(step.type) && config.target) {
+        try {
+          const locator = page.locator(config.target as string);
+          const box = await locator.boundingBox({ timeout: 2000 });
+          if (box) {
+            screencast.emitElementHighlight([{
+              x: box.x,
+              y: box.y,
+              width: box.width,
+              height: box.height,
+              label: step.description,
+            }]);
+            screencast.emitCursorMove(
+              box.x + box.width / 2,
+              box.y + box.height / 2
+            );
+          }
+        } catch {
+          // Highlight is best-effort
+        }
+      }
 
       runEventBus.emitRunEvent({
         type: "step_start",
@@ -291,6 +333,17 @@ export async function executeTestRun(options: ExecutorOptions): Promise<void> {
           duration: stepDuration,
           timestamp: Date.now(),
         });
+
+        if (screencast && step.type === "CLICK" && config.target) {
+          try {
+            const box = await page.locator(config.target as string).boundingBox({ timeout: 1000 });
+            if (box) {
+              screencast.emitClick(box.x + box.width / 2, box.y + box.height / 2);
+            }
+          } catch { /* best-effort */ }
+        }
+
+        screencast?.emitStepInfo(step.id, step.description, step.type, "passed");
 
         previousSteps.push({
           type: step.type,
@@ -414,6 +467,8 @@ export async function executeTestRun(options: ExecutorOptions): Promise<void> {
             timestamp: Date.now(),
           });
 
+          screencast?.emitStepInfo(step.id, step.description, step.type, "failed");
+
           previousSteps.push({ type: step.type, description: step.description, status: "FAILED" });
           runFailed = true;
 
@@ -452,6 +507,13 @@ export async function executeTestRun(options: ExecutorOptions): Promise<void> {
       }
     }
   } finally {
+    if (screencast) {
+      try {
+        await screencast.stop();
+      } catch { /* best-effort */ }
+      liveFrameBus.cleanupRun(runId);
+    }
+
     await context.close();
 
     const { getArtifactStore } = await import("@/lib/storage");

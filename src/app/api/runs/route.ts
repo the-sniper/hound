@@ -11,6 +11,7 @@ const createRunSchema = z.object({
   environmentId: z.string().optional(),
   recordVideo: z.boolean().optional().default(false),
   recordHar: z.boolean().optional().default(false),
+  liveView: z.boolean().optional().default(false),
 });
 
 export async function GET(request: NextRequest) {
@@ -103,6 +104,7 @@ export async function POST(request: Request) {
       environmentId: data.environmentId,
       recordVideo: data.recordVideo,
       recordHar: data.recordHar,
+      liveView: data.liveView,
     }).catch((err) => {
       console.error("Test execution error:", err);
       db.testRun

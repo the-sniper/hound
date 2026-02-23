@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
@@ -51,6 +51,7 @@ import {
   UserPlus,
   MessageSquare,
   Send,
+  Monitor,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -64,6 +65,9 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { formatDistanceToNow, formatDuration } from "@/lib/utils";
+import { LiveBrowserView, type ConnectionStatus, type OverlayEvent, type LiveBrowserViewRef } from "@/components/live-browser/LiveBrowserView";
+import { BrowserOverlay } from "@/components/live-browser/BrowserOverlay";
+import { BrowserToolbar } from "@/components/live-browser/BrowserToolbar";
 
 interface Run {
   id: string;
@@ -372,6 +376,39 @@ export default function RunViewerPage() {
   const [newComment, setNewComment] = useState("");
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [postingComment, setPostingComment] = useState(false);
+
+  // Live browser view state
+  const liveViewRef = useRef<LiveBrowserViewRef>(null);
+  const liveContainerRef = useRef<HTMLDivElement>(null);
+  const [liveConnectionStatus, setLiveConnectionStatus] = useState<ConnectionStatus>("disconnected");
+  const [liveFps, setLiveFps] = useState(0);
+  const [liveZoom, setLiveZoom] = useState(100);
+  const [liveOverlayEvents, setLiveOverlayEvents] = useState<OverlayEvent[]>([]);
+
+  const handleLiveOverlayEvent = useCallback((event: OverlayEvent) => {
+    setLiveOverlayEvents((prev) => [...prev.slice(-50), event]);
+  }, []);
+
+  const handleLiveCapture = useCallback(() => {
+    const dataUrl = liveViewRef.current?.captureFrame();
+    if (dataUrl) {
+      const link = document.createElement("a");
+      link.download = `hound-live-${runId}-${Date.now()}.png`;
+      link.href = dataUrl;
+      link.click();
+      toast.success("Screenshot captured");
+    }
+  }, [runId]);
+
+  const handleLiveFullscreen = useCallback(() => {
+    const el = liveContainerRef.current;
+    if (!el) return;
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else {
+      el.requestFullscreen();
+    }
+  }, []);
 
   useEffect(() => {
     loadRun(true);
@@ -885,6 +922,12 @@ export default function RunViewerPage() {
         className="space-y-4"
       >
         <TabsList>
+          {(run.status === "RUNNING" || run.status === "PENDING") && (
+            <TabsTrigger value="live">
+              <Monitor className="h-4 w-4 mr-1" />
+              Live
+            </TabsTrigger>
+          )}
           <TabsTrigger value="timeline">Step Timeline</TabsTrigger>
           <TabsTrigger value="screenshots">Screenshots</TabsTrigger>
           <TabsTrigger value="logs">Logs</TabsTrigger>
@@ -920,6 +963,39 @@ export default function RunViewerPage() {
             <TabsTrigger value="analysis">AI Analysis</TabsTrigger>
           )}
         </TabsList>
+
+        <TabsContent value="live">
+          <div ref={liveContainerRef} className="space-y-3">
+            <BrowserToolbar
+              connectionStatus={liveConnectionStatus}
+              fps={liveFps}
+              zoom={liveZoom}
+              onZoomChange={setLiveZoom}
+              onCapture={handleLiveCapture}
+              onFullscreen={handleLiveFullscreen}
+            />
+            <div
+              className="relative rounded-2xl overflow-hidden border border-border/30 shadow-[0_8px_30px_rgb(0,0,0,0.08)]"
+              style={{ transform: `scale(${liveZoom / 100})`, transformOrigin: "top left" }}
+            >
+              <LiveBrowserView
+                ref={liveViewRef}
+                runId={runId}
+                isRunning={run.status === "RUNNING" || run.status === "PENDING"}
+                onConnectionChange={setLiveConnectionStatus}
+                onOverlayEvent={handleLiveOverlayEvent}
+                onFpsUpdate={setLiveFps}
+              />
+              <BrowserOverlay
+                overlayEvents={liveOverlayEvents}
+                viewportWidth={1280}
+                viewportHeight={720}
+                containerWidth={liveContainerRef.current?.clientWidth ?? 1280}
+                containerHeight={liveContainerRef.current?.clientHeight ?? 720}
+              />
+            </div>
+          </div>
+        </TabsContent>
 
         <TabsContent value="timeline" className="space-y-4">
           <div className="grid gap-4 lg:grid-cols-[1fr_400px]">

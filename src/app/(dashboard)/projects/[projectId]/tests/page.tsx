@@ -212,9 +212,11 @@ export default function TestsPage() {
         testId: string;
         projectId: string;
         environmentId?: string;
+        liveView?: boolean;
       } = {
         testId,
         projectId,
+        liveView: true,
       };
       if (envId) {
         body.environmentId = envId;
