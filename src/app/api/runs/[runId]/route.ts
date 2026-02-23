@@ -26,6 +26,8 @@ export async function GET(
           error: true,
           logs: true,
           aiResponse: true,
+          cacheHit: true,
+          retryCount: true,
           step: {
             select: {
               id: true,
@@ -33,6 +35,7 @@ export async function GET(
               type: true,
               description: true,
               config: true,
+              maxRetries: true,
             },
           },
         },

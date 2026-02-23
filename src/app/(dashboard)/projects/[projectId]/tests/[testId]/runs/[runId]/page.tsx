@@ -16,7 +16,12 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import {
   ChevronLeft,
   ChevronRight,
@@ -35,7 +40,29 @@ import {
   RefreshCw,
   GitCompare,
   Eye,
+  Zap,
+  Video,
+  Globe,
+  AlertTriangle,
+  Accessibility,
+  Shield,
+  BarChart3,
+  GitBranch,
+  UserPlus,
+  MessageSquare,
+  Send,
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { toast } from "sonner";
 import { formatDistanceToNow, formatDuration } from "@/lib/utils";
 
 interface Run {
@@ -48,6 +75,8 @@ interface Run {
   startedAt: string | null;
   completedAt: string | null;
   createdAt: string;
+  videoUrl: string | null;
+  harUrl: string | null;
   test: {
     id: string;
     name: string;
@@ -62,6 +91,8 @@ interface StepResult {
   error: string | null;
   logs: unknown;
   aiResponse: unknown;
+  cacheHit?: boolean;
+  retryCount?: number;
   step: {
     id: string;
     orderIndex: number;
@@ -130,6 +161,43 @@ interface BaselineRun {
   _count: { results: number };
 }
 
+interface HarEntry {
+  request: { method: string; url: string };
+  response: { status: number; content: { size: number; mimeType: string } };
+  time: number;
+  timings: { wait: number; receive: number };
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+}
+
+function formatMs(ms: number): string {
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  return `${(ms / 1000).toFixed(2)}s`;
+}
+
+function getStatusColor(status: number): string {
+  if (status >= 200 && status < 300) return "text-green-600";
+  if (status >= 300 && status < 400) return "text-yellow-600";
+  return "text-red-600";
+}
+
+function getContentType(mimeType: string): string {
+  if (mimeType.includes("json")) return "JSON";
+  if (mimeType.includes("html")) return "HTML";
+  if (mimeType.includes("css")) return "CSS";
+  if (mimeType.includes("javascript")) return "JS";
+  if (mimeType.includes("image")) return "Image";
+  if (mimeType.includes("font")) return "Font";
+  if (mimeType.includes("xml")) return "XML";
+  return mimeType.split("/").pop()?.toUpperCase() || "Other";
+}
+
 // Screenshot thumbnail component with error handling
 function ScreenshotThumbnail({
   result,
@@ -173,7 +241,7 @@ import { motion, AnimatePresence } from "framer-motion";
 // AI Thinking State Component
 function AIThinkingIndicator() {
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-primary/5 border border-primary/10 shadow-sm"
@@ -191,12 +259,14 @@ function AIThinkingIndicator() {
               duration: 1.2,
               repeat: Infinity,
               delay: i * 0.2,
-              ease: "easeInOut"
+              ease: "easeInOut",
             }}
           />
         ))}
       </div>
-      <span className="text-[10px] font-bold uppercase tracking-widest text-primary/80">AI Analyzing Run</span>
+      <span className="text-[10px] font-bold uppercase tracking-widest text-primary/80">
+        AI Analyzing Run
+      </span>
     </motion.div>
   );
 }
@@ -204,7 +274,7 @@ function AIThinkingIndicator() {
 // Streaming AI Response Component
 function StreamingAIResponse({ response }: { response: string }) {
   const [displayed, setDisplayed] = useState("");
-  
+
   useEffect(() => {
     let index = 0;
     const interval = setInterval(() => {
@@ -215,10 +285,10 @@ function StreamingAIResponse({ response }: { response: string }) {
         clearInterval(interval);
       }
     }, 15);
-    
+
     return () => clearInterval(interval);
   }, [response]);
-  
+
   return (
     <div className="relative">
       <div className="text-sm leading-relaxed text-foreground/90 font-medium whitespace-pre-wrap">
@@ -247,15 +317,66 @@ export default function RunViewerPage() {
   const eventSourceRef = useRef<EventSource | null>(null);
 
   // Comparison state
-  const [comparisonData, setComparisonData] = useState<ComparisonData | null>(null);
+  const [comparisonData, setComparisonData] = useState<ComparisonData | null>(
+    null,
+  );
   const [baselineRuns, setBaselineRuns] = useState<BaselineRun[]>([]);
-  const [selectedBaselineRunId, setSelectedBaselineRunId] = useState<string>("");
+  const [selectedBaselineRunId, setSelectedBaselineRunId] =
+    useState<string>("");
   const [comparing, setComparing] = useState(false);
-  const [selectedComparison, setSelectedComparison] = useState<ComparisonResult | null>(null);
+  const [selectedComparison, setSelectedComparison] =
+    useState<ComparisonResult | null>(null);
+
+  // Network HAR state
+  const [harEntries, setHarEntries] = useState<HarEntry[]>([]);
+  const [harLoading, setHarLoading] = useState(false);
+  const [harLoaded, setHarLoaded] = useState(false);
+
+  // Accessibility state
+  const [a11yData, setA11yData] = useState<{
+    score: number;
+    violations: any[];
+    summary: Record<string, number>;
+  } | null>(null);
+  const [a11yLoading, setA11yLoading] = useState(false);
+
+  // Performance state
+  const [perfData, setPerfData] = useState<{
+    metrics: any[];
+    networkTimings: any[];
+  } | null>(null);
+  const [perfLoading, setPerfLoading] = useState(false);
+
+  // Security state
+  const [secData, setSecData] = useState<{
+    grade: string;
+    findings: any[];
+    summary: Record<string, number>;
+  } | null>(null);
+  const [secLoading, setSecLoading] = useState(false);
+
+  // Correlate state
+  const [correlateDialogOpen, setCorrelateDialogOpen] = useState(false);
+  const [correlateInput, setCorrelateInput] = useState("");
+  const [correlateResult, setCorrelateResult] = useState<any>(null);
+  const [correlating, setCorrelating] = useState(false);
+
+  // Assign state
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [assignee, setAssignee] = useState("");
+  const [assignNote, setAssignNote] = useState("");
+  const [assigning, setAssigning] = useState(false);
+
+  // Comments state
+  const [comments, setComments] = useState<any[]>([]);
+  const [newComment, setNewComment] = useState("");
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [postingComment, setPostingComment] = useState(false);
 
   useEffect(() => {
-    loadRun();
+    loadRun(true);
     setupEventSource();
+    loadComments();
 
     return () => {
       if (eventSourceRef.current) {
@@ -264,14 +385,33 @@ export default function RunViewerPage() {
     };
   }, [runId]);
 
-  async function loadRun() {
-    setLoading(true);
+  useEffect(() => {
+    if (selectedStep?.step.type === "ASSERT_ACCESSIBLE") {
+      loadAccessibility();
+    } else if (selectedStep?.step.type === "SECURITY_SCAN") {
+      loadSecurity();
+    }
+  }, [selectedStep?.id, selectedStep?.step.type]);
+
+  // Poll while the run is still in progress so we catch newly created step results
+  useEffect(() => {
+    if (!run) return;
+    const isActive = run.status === "RUNNING" || run.status === "PENDING";
+    if (!isActive) return;
+
+    const interval = setInterval(() => {
+      loadRun(false);
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [run?.status, runId]);
+
+  async function loadRun(showSpinner = true) {
+    if (showSpinner) setLoading(true);
     try {
       const res = await fetch(`/api/runs/${runId}`);
       if (res.ok) {
         const data = await res.json();
-        console.log("Run data:", data);
-        console.log("Results:", data.results);
         setRun(data);
         const resultsArray = data.results || [];
         setResults(resultsArray);
@@ -285,7 +425,7 @@ export default function RunViewerPage() {
     } catch (error) {
       console.error("Failed to load run:", error);
     }
-    setLoading(false);
+    if (showSpinner) setLoading(false);
   }
 
   function setupEventSource() {
@@ -299,8 +439,8 @@ export default function RunViewerPage() {
         if (data.type === "step_start") {
           setResults((prev) =>
             prev.map((r) =>
-              r.step.id === data.stepId ? { ...r, status: "RUNNING" } : r
-            )
+              r.step.id === data.stepId ? { ...r, status: "RUNNING" } : r,
+            ),
           );
         } else if (data.type === "step_complete") {
           setResults((prev) =>
@@ -312,8 +452,8 @@ export default function RunViewerPage() {
                     screenshotUrl: data.screenshotUrl || r.screenshotUrl,
                     duration: data.duration || r.duration,
                   }
-                : r
-            )
+                : r,
+            ),
           );
         } else if (data.type === "step_error") {
           setResults((prev) =>
@@ -326,8 +466,8 @@ export default function RunViewerPage() {
                     screenshotUrl: data.screenshotUrl || r.screenshotUrl,
                     duration: data.duration || r.duration,
                   }
-                : r
-            )
+                : r,
+            ),
           );
         } else if (data.type === "run_complete") {
           loadRun(); // Reload to get final state
@@ -365,7 +505,7 @@ export default function RunViewerPage() {
     setComparing(true);
     try {
       const res = await fetch(
-        `/api/runs/${runId}/compare?baselineRunId=${selectedBaselineRunId}`
+        `/api/runs/${runId}/compare?baselineRunId=${selectedBaselineRunId}`,
       );
       if (res.ok) {
         const data = await res.json();
@@ -382,6 +522,179 @@ export default function RunViewerPage() {
       alert("Failed to compare runs");
     }
     setComparing(false);
+  }
+
+  async function loadHarData() {
+    if (harLoaded || harLoading) return;
+    setHarLoading(true);
+    try {
+      const res = await fetch(`/api/runs/${runId}/har`);
+      if (res.ok) {
+        const data = await res.json();
+        setHarEntries(data?.log?.entries || []);
+      }
+    } catch (error) {
+      console.error("Failed to load HAR data:", error);
+    }
+    setHarLoading(false);
+    setHarLoaded(true);
+  }
+
+  async function loadAccessibility() {
+    if (a11yData || a11yLoading) return;
+    setA11yLoading(true);
+    try {
+      const res = await fetch(`/api/runs/${runId}/accessibility`);
+      if (res.ok) {
+        const data = await res.json();
+        const violations = data.violations || data.results || [];
+        const summary: Record<string, number> = {
+          critical: 0,
+          serious: 0,
+          moderate: 0,
+          minor: 0,
+        };
+        violations.forEach((v: any) => {
+          const impact = v.impact?.toLowerCase() || "minor";
+          if (summary[impact] !== undefined) summary[impact]++;
+        });
+        setA11yData({
+          score: data.score ?? data.accessibilityScore ?? 0,
+          violations,
+          summary,
+        });
+      }
+    } catch (error) {
+      console.error("Failed to load accessibility data:", error);
+    }
+    setA11yLoading(false);
+  }
+
+  async function loadPerformance() {
+    if (perfData || perfLoading) return;
+    setPerfLoading(true);
+    try {
+      const res = await fetch(`/api/runs/${runId}/performance`);
+      if (res.ok) {
+        const data = await res.json();
+        setPerfData({
+          metrics: data.metrics || data || [],
+          networkTimings: data.networkTimings || [],
+        });
+      }
+    } catch (error) {
+      console.error("Failed to load performance data:", error);
+    }
+    setPerfLoading(false);
+  }
+
+  async function loadSecurity() {
+    if (secData || secLoading) return;
+    setSecLoading(true);
+    try {
+      const res = await fetch(`/api/runs/${runId}/security`);
+      if (res.ok) {
+        const data = await res.json();
+        const findings = data.findings || data || [];
+        const summary: Record<string, number> = {
+          critical: 0,
+          high: 0,
+          medium: 0,
+          low: 0,
+          info: 0,
+        };
+        findings.forEach((f: any) => {
+          const sev = f.severity?.toLowerCase() || "info";
+          if (summary[sev] !== undefined) summary[sev]++;
+        });
+        setSecData({
+          grade: data.grade || data.securityGrade || "N/A",
+          findings,
+          summary,
+        });
+      }
+    } catch (error) {
+      console.error("Failed to load security data:", error);
+    }
+    setSecLoading(false);
+  }
+
+  async function handleCorrelate() {
+    setCorrelating(true);
+    try {
+      const res = await fetch(`/api/runs/${runId}/correlate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ diff: correlateInput }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCorrelateResult(data);
+      } else {
+        console.error("Correlation failed");
+      }
+    } catch {
+      console.error("Correlation failed");
+    }
+    setCorrelating(false);
+  }
+
+  async function handleAssign() {
+    setAssigning(true);
+    try {
+      const res = await fetch(`/api/runs/${runId}/assign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assignee, note: assignNote }),
+      });
+      if (res.ok) {
+        setAssignDialogOpen(false);
+        setAssignee("");
+        setAssignNote("");
+      }
+    } catch {
+      console.error("Assignment failed");
+    }
+    setAssigning(false);
+  }
+
+  async function loadComments() {
+    setCommentsLoading(true);
+    try {
+      const res = await fetch(
+        `/api/projects/${projectId}/comments?targetType=run&targetId=${runId}`,
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setComments(data.comments || data || []);
+      }
+    } catch (error) {
+      console.error("Failed to load comments:", error);
+    }
+    setCommentsLoading(false);
+  }
+
+  async function handlePostComment() {
+    if (!newComment.trim()) return;
+    setPostingComment(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: newComment,
+          targetType: "run",
+          targetId: runId,
+        }),
+      });
+      if (res.ok) {
+        setNewComment("");
+        await loadComments();
+      }
+    } catch {
+      console.error("Failed to post comment");
+    }
+    setPostingComment(false);
   }
 
   function getStatusIcon(status: string) {
@@ -467,7 +780,10 @@ export default function RunViewerPage() {
           Project
         </Link>
         <ChevronRight className="h-4 w-4" />
-        <Link href={`/projects/${projectId}/tests`} className="hover:text-foreground">
+        <Link
+          href={`/projects/${projectId}/tests`}
+          className="hover:text-foreground"
+        >
           Tests
         </Link>
         <ChevronRight className="h-4 w-4" />
@@ -478,20 +794,28 @@ export default function RunViewerPage() {
           {run.test.name}
         </Link>
         <ChevronRight className="h-4 w-4" />
-        <span className="text-foreground font-medium">Run {runId.slice(-6)}</span>
+        <span className="text-foreground font-medium">
+          Run {runId.slice(-6)}
+        </span>
       </div>
 
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-6">
           <Link href={`/projects/${projectId}/tests/${testId}`}>
-            <Button variant="outline" size="icon" className="rounded-xl h-12 w-12 border-border/50 hover:bg-primary/5 hover:text-primary transition-all">
+            <Button
+              variant="outline"
+              size="icon"
+              className="rounded-xl h-12 w-12 border-border/50 hover:bg-primary/5 hover:text-primary transition-all"
+            >
               <ChevronLeft className="h-5 w-5" />
             </Button>
           </Link>
           <div>
             <div className="flex items-center gap-3 mb-1">
-              <h1 className="text-4xl font-display font-normal tracking-tight">Test Run</h1>
+              <h1 className="text-4xl font-display font-normal tracking-tight">
+                Test Run
+              </h1>
               {run.status === "RUNNING" && <AIThinkingIndicator />}
             </div>
             <div className="flex items-center gap-4 text-sm font-medium text-muted-foreground">
@@ -509,7 +833,11 @@ export default function RunViewerPage() {
             </div>
           </div>
         </div>
-        <Button onClick={loadRun} variant="outline" className="rounded-full h-12 px-6 border-border/50 font-semibold hover:bg-primary/5 hover:text-primary transition-all">
+        <Button
+          onClick={() => loadRun(true)}
+          variant="outline"
+          className="rounded-full h-12 px-6 border-border/50 font-semibold hover:bg-primary/5 hover:text-primary transition-all"
+        >
           <RefreshCw className="mr-2 h-4 w-4" />
           Refresh
         </Button>
@@ -523,9 +851,7 @@ export default function RunViewerPage() {
           </span>
           <span className="font-medium">
             {results.length > 0
-              ? Math.round(
-                  ((passedSteps + failedSteps) / results.length) * 100
-                )
+              ? Math.round(((passedSteps + failedSteps) / results.length) * 100)
               : 0}
             %
           </span>
@@ -553,11 +879,39 @@ export default function RunViewerPage() {
       </div>
 
       {/* Main Content */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+      <Tabs
+        value={activeTab}
+        onValueChange={setActiveTab}
+        className="space-y-4"
+      >
         <TabsList>
           <TabsTrigger value="timeline">Step Timeline</TabsTrigger>
           <TabsTrigger value="screenshots">Screenshots</TabsTrigger>
           <TabsTrigger value="logs">Logs</TabsTrigger>
+          {run.videoUrl && (
+            <TabsTrigger value="video">
+              <Video className="h-4 w-4 mr-1" />
+              Video
+            </TabsTrigger>
+          )}
+          {run.harUrl && (
+            <TabsTrigger value="network" onClick={loadHarData}>
+              <Globe className="h-4 w-4 mr-1" />
+              Network
+            </TabsTrigger>
+          )}
+          <TabsTrigger value="accessibility" onClick={loadAccessibility}>
+            <Accessibility className="h-4 w-4 mr-1" />
+            A11y
+          </TabsTrigger>
+          <TabsTrigger value="performance" onClick={loadPerformance}>
+            <BarChart3 className="h-4 w-4 mr-1" />
+            Perf
+          </TabsTrigger>
+          <TabsTrigger value="security" onClick={loadSecurity}>
+            <Shield className="h-4 w-4 mr-1" />
+            Security
+          </TabsTrigger>
           <TabsTrigger value="compare" onClick={loadBaselineRuns}>
             <GitCompare className="h-4 w-4 mr-1" />
             Compare
@@ -599,17 +953,19 @@ export default function RunViewerPage() {
                             result.status === "PASSED"
                               ? "border-green-500 bg-green-50"
                               : result.status === "FAILED"
-                              ? "border-red-500 bg-red-50"
-                              : result.status === "RUNNING"
-                              ? "border-blue-500 bg-blue-50"
-                              : "border-gray-300 bg-gray-50"
+                                ? "border-red-500 bg-red-50"
+                                : result.status === "RUNNING"
+                                  ? "border-blue-500 bg-blue-50"
+                                  : "border-gray-300 bg-gray-50"
                           }`}
                         >
-                          <span className="text-xs font-medium">{index + 1}</span>
+                          <span className="text-xs font-medium">
+                            {index + 1}
+                          </span>
                         </div>
 
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <Badge variant="outline" className="text-xs">
                               {getStepIcon(result.step.type)}
                               <span className="ml-1">{result.step.type}</span>
@@ -619,8 +975,22 @@ export default function RunViewerPage() {
                                 {formatDuration(result.duration)}
                               </span>
                             )}
+                            {result.cacheHit && (
+                              <Badge className="bg-amber-50 text-amber-700 border border-amber-200 text-[10px] px-1.5 py-0 gap-1">
+                                <Zap className="h-3 w-3" />
+                                Cached
+                              </Badge>
+                            )}
+                            {(result.retryCount ?? 0) > 0 && (
+                              <Badge className="bg-orange-50 text-orange-700 border border-orange-200 text-[10px] px-1.5 py-0 gap-1">
+                                <RefreshCw className="h-3 w-3" />
+                                Retried &times;{result.retryCount}
+                              </Badge>
+                            )}
                           </div>
-                          <p className="font-medium mt-1">{result.step.description}</p>
+                          <p className="font-medium mt-1">
+                            {result.step.description}
+                          </p>
                           {result.error && (
                             <p className="text-sm text-red-600 mt-1 line-clamp-2">
                               {result.error}
@@ -651,29 +1021,221 @@ export default function RunViewerPage() {
                       <Badge>{selectedStep.step.type}</Badge>
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground mb-1">Description</p>
-                      <p className="font-medium">{selectedStep.step.description}</p>
+                      <p className="text-sm text-muted-foreground mb-1">
+                        Description
+                      </p>
+                      <p className="font-medium">
+                        {selectedStep.step.description}
+                      </p>
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground mb-1">Status</p>
+                      <p className="text-sm text-muted-foreground mb-1">
+                        Status
+                      </p>
                       {getStatusBadge(selectedStep.status)}
                     </div>
                     {selectedStep.duration && (
                       <div>
-                        <p className="text-sm text-muted-foreground mb-1">Duration</p>
+                        <p className="text-sm text-muted-foreground mb-1">
+                          Duration
+                        </p>
                         <p>{formatDuration(selectedStep.duration)}</p>
                       </div>
                     )}
                     {selectedStep.error && (
-                      <div>
-                        <p className="text-sm text-muted-foreground mb-1">Error</p>
-                        <p className="text-sm text-red-600 bg-red-50 p-3 rounded">
-                          {selectedStep.error}
-                        </p>
+                      <div className="space-y-4">
+                        <div>
+                          <p className="text-sm text-muted-foreground mb-1">
+                            Error
+                          </p>
+                          <div className="text-sm text-red-600 bg-red-50 p-4 rounded-xl border border-red-100 whitespace-pre-wrap">
+                            {selectedStep.error}
+                          </div>
+                        </div>
+
+                        {((selectedStep.step.type === "ASSERT_ACCESSIBLE" &&
+                          a11yData &&
+                          a11yData.violations.filter(
+                            (v: any) => v.stepResultId === selectedStep.id,
+                          ).length > 0) ||
+                          (selectedStep.step.type === "SECURITY_SCAN" &&
+                            secData &&
+                            secData.findings.length > 0)) && (
+                          <div className="pt-2">
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  className="w-full sm:w-auto bg-white hover:bg-gray-50 text-gray-700"
+                                >
+                                  <Eye className="w-4 h-4 mr-2" />
+                                  View Detailed Report
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col p-0 overflow-hidden bg-white border-none shadow-2xl">
+                                <DialogHeader className="px-8 py-6 border-b border-gray-100 shrink-0 bg-white">
+                                  <DialogTitle className="text-2xl font-semibold flex items-center gap-3 text-gray-900">
+                                    {selectedStep.step.type ===
+                                    "ASSERT_ACCESSIBLE" ? (
+                                      <>
+                                        <Accessibility className="w-6 h-6 text-primary" />{" "}
+                                        Accessibility Violations
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Shield className="w-6 h-6 text-primary" />{" "}
+                                        Security Findings
+                                      </>
+                                    )}
+                                  </DialogTitle>
+                                </DialogHeader>
+                                <div className="flex-1 overflow-y-auto px-8 py-6 bg-gray-50/30">
+                                  <div className="space-y-6 pb-8">
+                                    {selectedStep.step.type ===
+                                      "ASSERT_ACCESSIBLE" &&
+                                      a11yData &&
+                                      a11yData.violations
+                                        .filter(
+                                          (v: any) =>
+                                            v.stepResultId === selectedStep.id,
+                                        )
+                                        .map((v: any, index: number) => (
+                                          <div
+                                            key={v.id || index}
+                                            className="group bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all duration-200"
+                                          >
+                                            <div className="flex items-start justify-between gap-4 mb-4">
+                                              <div className="flex flex-wrap items-center gap-3">
+                                                <Badge
+                                                  variant="outline"
+                                                  className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border-none shadow-sm ${
+                                                    v.impact === "critical" ||
+                                                    v.impact === "serious"
+                                                      ? "bg-red-100 text-red-700"
+                                                      : "bg-orange-100 text-orange-700"
+                                                  }`}
+                                                >
+                                                  {v.impact}
+                                                </Badge>
+                                                <span className="text-lg font-bold text-gray-900">
+                                                  {v.ruleId}
+                                                </span>
+                                              </div>
+                                              <Badge
+                                                variant="secondary"
+                                                className="bg-gray-100 text-gray-600 font-mono text-[10px] uppercase px-2 py-1"
+                                              >
+                                                {v.wcagCriteria}
+                                              </Badge>
+                                            </div>
+
+                                            <p className="text-gray-600 mb-6 leading-relaxed text-[15px]">
+                                              {v.description}
+                                            </p>
+
+                                            <div className="space-y-3">
+                                              <div className="flex flex-col gap-1.5">
+                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-1">
+                                                  Target Element
+                                                </span>
+                                                <div className="bg-gray-50 border border-gray-100 p-4 rounded-xl text-[13px] font-mono text-gray-700 break-all leading-relaxed">
+                                                  {v.target}
+                                                </div>
+                                              </div>
+
+                                              {v.html && (
+                                                <div className="flex flex-col gap-1.5 text-black">
+                                                  <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-1">
+                                                    Source Snippet
+                                                  </span>
+                                                  <div className="bg-gray-900 p-4 rounded-xl text-[12px] font-mono text-gray-300 overflow-x-auto shadow-inner border border-gray-800">
+                                                    {v.html}
+                                                  </div>
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                        ))}
+
+                                    {selectedStep.step.type ===
+                                      "SECURITY_SCAN" &&
+                                      secData &&
+                                      secData.findings.map(
+                                        (f: any, index: number) => (
+                                          <div
+                                            key={f.id || index}
+                                            className="group bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all duration-200"
+                                          >
+                                            <div className="flex items-start justify-between gap-4 mb-4">
+                                              <div className="flex flex-wrap items-center gap-3">
+                                                <Badge
+                                                  variant="outline"
+                                                  className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border-none shadow-sm ${
+                                                    f.severity === "critical" ||
+                                                    f.severity === "high"
+                                                      ? "bg-red-100 text-red-700"
+                                                      : "bg-orange-100 text-orange-700"
+                                                  }`}
+                                                >
+                                                  {f.severity}
+                                                </Badge>
+                                                <span className="text-lg font-bold text-gray-900">
+                                                  {f.title}
+                                                </span>
+                                              </div>
+                                              <Badge
+                                                variant="secondary"
+                                                className="bg-gray-100 text-gray-600 font-mono text-[10px] uppercase px-2 py-1"
+                                              >
+                                                {f.type}
+                                              </Badge>
+                                            </div>
+
+                                            <p className="text-gray-600 mb-6 leading-relaxed text-[15px]">
+                                              {f.description}
+                                            </p>
+
+                                            <div className="space-y-4 text-black">
+                                              {f.location && (
+                                                <div className="flex flex-col gap-1.5">
+                                                  <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-1">
+                                                    Location
+                                                  </span>
+                                                  <div className="bg-gray-50 border border-gray-100 p-4 rounded-xl text-[13px] font-mono text-gray-700 break-all leading-relaxed">
+                                                    {f.location}
+                                                  </div>
+                                                </div>
+                                              )}
+
+                                              {f.remediation && (
+                                                <div className="bg-emerald-50 border border-emerald-100 p-5 rounded-2xl">
+                                                  <div className="flex items-center gap-2 mb-2">
+                                                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                                    <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">
+                                                      Recommended Fix
+                                                    </span>
+                                                  </div>
+                                                  <p className="text-emerald-900 text-[14px] leading-relaxed font-medium">
+                                                    {f.remediation}
+                                                  </p>
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                        ),
+                                      )}
+                                  </div>
+                                </div>
+                              </DialogContent>
+                            </Dialog>
+                          </div>
+                        )}
                       </div>
                     )}
                     <div>
-                      <p className="text-sm text-muted-foreground mb-1">Configuration</p>
+                      <p className="text-sm text-muted-foreground mb-1">
+                        Configuration
+                      </p>
                       <pre className="text-xs bg-gray-50 p-3 rounded overflow-auto">
                         {JSON.stringify(selectedStep.step.config, null, 2)}
                       </pre>
@@ -757,8 +1319,12 @@ export default function RunViewerPage() {
                 {results.map((result) => (
                   <div key={result.id} className="mb-6">
                     <div className="flex items-center gap-2 mb-2">
-                      <Badge variant="outline">Step {result.step.orderIndex + 1}</Badge>
-                      <span className="text-sm font-medium">{result.step.type}</span>
+                      <Badge variant="outline">
+                        Step {result.step.orderIndex + 1}
+                      </Badge>
+                      <span className="text-sm font-medium">
+                        {result.step.type}
+                      </span>
                       {getStatusIcon(result.status)}
                     </div>
                     {result.logs ? (
@@ -778,6 +1344,200 @@ export default function RunViewerPage() {
           </Card>
         </TabsContent>
 
+        {run.videoUrl && (
+          <TabsContent value="video">
+            <Card className="border-border/50 shadow-elegant rounded-[2rem] overflow-hidden">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Video className="h-5 w-5 text-primary" />
+                  Run Recording
+                </CardTitle>
+                <CardDescription>
+                  Full video recording of the test execution
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="rounded-xl overflow-hidden bg-black/5 border border-border/30">
+                  <video
+                    controls
+                    className="w-full rounded-lg"
+                    src={run.videoUrl}
+                  >
+                    Your browser does not support video playback.
+                  </video>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+
+        {run.harUrl && (
+          <TabsContent value="network">
+            <Card className="border-border/50 shadow-elegant rounded-[2rem] overflow-hidden">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Globe className="h-5 w-5 text-primary" />
+                  Network Requests
+                </CardTitle>
+                <CardDescription>
+                  HTTP request waterfall captured during the run
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {harLoading ? (
+                  <div className="flex items-center justify-center h-[300px]">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  </div>
+                ) : harEntries.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground">
+                    <Globe className="h-12 w-12 mb-4 opacity-40" />
+                    <p>No network requests captured</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {/* Summary row */}
+                    <div className="grid grid-cols-4 gap-3">
+                      <div className="bg-muted/50 border border-border/30 rounded-xl p-3">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">
+                          Requests
+                        </p>
+                        <p className="text-xl font-semibold mt-1">
+                          {harEntries.length}
+                        </p>
+                      </div>
+                      <div className="bg-muted/50 border border-border/30 rounded-xl p-3">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">
+                          Total Size
+                        </p>
+                        <p className="text-xl font-semibold mt-1">
+                          {formatBytes(
+                            harEntries.reduce(
+                              (acc, e) => acc + (e.response.content.size || 0),
+                              0,
+                            ),
+                          )}
+                        </p>
+                      </div>
+                      <div className="bg-muted/50 border border-border/30 rounded-xl p-3">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">
+                          Total Time
+                        </p>
+                        <p className="text-xl font-semibold mt-1">
+                          {formatMs(
+                            harEntries.reduce(
+                              (acc, e) => acc + (e.time || 0),
+                              0,
+                            ),
+                          )}
+                        </p>
+                      </div>
+                      <div className="bg-muted/50 border border-border/30 rounded-xl p-3">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">
+                          Slow (&gt;1s)
+                        </p>
+                        <p className="text-xl font-semibold mt-1 text-orange-600">
+                          {harEntries.filter((e) => e.time > 1000).length}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Request table */}
+                    <ScrollArea className="h-[calc(100vh-480px)]">
+                      <div className="rounded-xl border border-border/30 overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="bg-muted/50 border-b border-border/30">
+                              <th className="text-left px-4 py-2.5 font-semibold text-muted-foreground text-xs uppercase tracking-wider w-[70px]">
+                                Method
+                              </th>
+                              <th className="text-left px-4 py-2.5 font-semibold text-muted-foreground text-xs uppercase tracking-wider">
+                                URL
+                              </th>
+                              <th className="text-left px-4 py-2.5 font-semibold text-muted-foreground text-xs uppercase tracking-wider w-[70px]">
+                                Status
+                              </th>
+                              <th className="text-left px-4 py-2.5 font-semibold text-muted-foreground text-xs uppercase tracking-wider w-[70px]">
+                                Type
+                              </th>
+                              <th className="text-right px-4 py-2.5 font-semibold text-muted-foreground text-xs uppercase tracking-wider w-[80px]">
+                                Size
+                              </th>
+                              <th className="text-right px-4 py-2.5 font-semibold text-muted-foreground text-xs uppercase tracking-wider w-[90px]">
+                                Duration
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {harEntries.map((entry, i) => {
+                              const isSlow = entry.time > 1000;
+                              const urlObj = (() => {
+                                try {
+                                  return new URL(entry.request.url);
+                                } catch {
+                                  return null;
+                                }
+                              })();
+                              const displayUrl = urlObj
+                                ? urlObj.pathname + urlObj.search
+                                : entry.request.url;
+                              return (
+                                <tr
+                                  key={i}
+                                  className={`border-b border-border/10 transition-colors hover:bg-muted/30 ${isSlow ? "bg-orange-50/50" : ""}`}
+                                >
+                                  <td className="px-4 py-2">
+                                    <Badge
+                                      variant="outline"
+                                      className="text-[10px] font-mono px-1.5 py-0"
+                                    >
+                                      {entry.request.method}
+                                    </Badge>
+                                  </td>
+                                  <td
+                                    className="px-4 py-2 font-mono text-xs truncate max-w-[400px]"
+                                    title={entry.request.url}
+                                  >
+                                    {displayUrl}
+                                  </td>
+                                  <td
+                                    className={`px-4 py-2 font-semibold ${getStatusColor(entry.response.status)}`}
+                                  >
+                                    {entry.response.status}
+                                  </td>
+                                  <td className="px-4 py-2 text-xs text-muted-foreground">
+                                    {getContentType(
+                                      entry.response.content.mimeType,
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-2 text-right text-xs text-muted-foreground tabular-nums">
+                                    {formatBytes(
+                                      entry.response.content.size || 0,
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-2 text-right tabular-nums">
+                                    <span
+                                      className={`text-xs ${isSlow ? "text-orange-600 font-semibold" : "text-muted-foreground"}`}
+                                    >
+                                      {isSlow && (
+                                        <AlertTriangle className="inline h-3 w-3 mr-1 -mt-0.5" />
+                                      )}
+                                      {formatMs(entry.time)}
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </ScrollArea>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+
         {run.failureAnalysis && (
           <TabsContent value="analysis">
             <Card className="border-primary/20 shadow-elegant rounded-[2rem] overflow-hidden">
@@ -795,14 +1555,18 @@ export default function RunViewerPage() {
                   <div className="absolute -left-4 top-0 bottom-0 w-1 bg-primary/10 rounded-full" />
                   <StreamingAIResponse response={run.failureAnalysis} />
                 </div>
-                
+
                 <div className="mt-10 flex items-center gap-4 p-4 rounded-2xl bg-muted/50 border border-border/50">
                   <div className="h-10 w-10 rounded-xl bg-background flex items-center justify-center text-primary shadow-sm">
                     <Activity className="h-5 w-5" />
                   </div>
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60">Recommendation</p>
-                    <p className="text-sm font-semibold text-foreground/80">Check the element locator in Step 4</p>
+                    <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60">
+                      Recommendation
+                    </p>
+                    <p className="text-sm font-semibold text-foreground/80">
+                      Check the element locator in Step 4
+                    </p>
                   </div>
                 </div>
               </CardContent>
@@ -835,13 +1599,16 @@ export default function RunViewerPage() {
                     <option value="">Select a baseline run...</option>
                     {baselineRuns.map((run) => (
                       <option key={run.id} value={run.id}>
-                        Run {run.id.slice(-6)} - {new Date(run.createdAt).toLocaleString()} ({run._count.results} steps)
+                        Run {run.id.slice(-6)} -{" "}
+                        {new Date(run.createdAt).toLocaleString()} (
+                        {run._count.results} steps)
                       </option>
                     ))}
                   </select>
                   {baselineRuns.length === 0 && (
                     <p className="text-xs text-muted-foreground">
-                      No valid baseline runs found. Baseline runs must have passed status and contain screenshots.
+                      No valid baseline runs found. Baseline runs must have
+                      passed status and contain screenshots.
                     </p>
                   )}
                 </div>
@@ -866,19 +1633,30 @@ export default function RunViewerPage() {
                     <div className="grid grid-cols-2 gap-2 text-sm">
                       <div className="bg-gray-50 p-2 rounded">
                         <span className="text-muted-foreground">Compared:</span>
-                        <p className="font-medium">{comparisonData.summary.totalCompared}</p>
+                        <p className="font-medium">
+                          {comparisonData.summary.totalCompared}
+                        </p>
                       </div>
                       <div className="bg-green-50 p-2 rounded">
                         <span className="text-green-600">Matched:</span>
-                        <p className="font-medium text-green-700">{comparisonData.summary.matchedCount}</p>
+                        <p className="font-medium text-green-700">
+                          {comparisonData.summary.matchedCount}
+                        </p>
                       </div>
                       <div className="bg-red-50 p-2 rounded">
                         <span className="text-red-600">Differences:</span>
-                        <p className="font-medium text-red-700">{comparisonData.summary.diffCount}</p>
+                        <p className="font-medium text-red-700">
+                          {comparisonData.summary.diffCount}
+                        </p>
                       </div>
                       <div className="bg-blue-50 p-2 rounded">
                         <span className="text-blue-600">Avg Diff:</span>
-                        <p className="font-medium text-blue-700">{comparisonData.summary.averageDiffPercentage.toFixed(2)}%</p>
+                        <p className="font-medium text-blue-700">
+                          {comparisonData.summary.averageDiffPercentage.toFixed(
+                            2,
+                          )}
+                          %
+                        </p>
                       </div>
                     </div>
                     {comparisonData.summary.hasSignificantChanges && (
@@ -906,7 +1684,9 @@ export default function RunViewerPage() {
                             }`}
                           >
                             <div className="flex items-center justify-between">
-                              <span className="font-medium">Step {comp.stepIndex}</span>
+                              <span className="font-medium">
+                                Step {comp.stepIndex}
+                              </span>
                               {comp.result ? (
                                 comp.result.matched ? (
                                   <CheckCircle className="h-4 w-4 text-green-500" />
@@ -916,7 +1696,9 @@ export default function RunViewerPage() {
                               ) : comp.error ? (
                                 <AlertCircle className="h-4 w-4 text-amber-500" />
                               ) : (
-                                <span className="text-xs text-muted-foreground">No baseline</span>
+                                <span className="text-xs text-muted-foreground">
+                                  No baseline
+                                </span>
                               )}
                             </div>
                             <p className="text-xs text-muted-foreground truncate">
@@ -924,7 +1706,8 @@ export default function RunViewerPage() {
                             </p>
                             {comp.result && !comp.result.matched && (
                               <p className="text-xs text-red-600">
-                                {comp.result.diffPercentage.toFixed(2)}% different
+                                {comp.result.diffPercentage.toFixed(2)}%
+                                different
                               </p>
                             )}
                           </div>
@@ -942,7 +1725,8 @@ export default function RunViewerPage() {
                 <CardTitle>Screenshot Comparison</CardTitle>
                 {selectedComparison && (
                   <CardDescription>
-                    Step {selectedComparison.stepIndex}: {selectedComparison.stepDescription}
+                    Step {selectedComparison.stepIndex}:{" "}
+                    {selectedComparison.stepDescription}
                   </CardDescription>
                 )}
               </CardHeader>
@@ -968,7 +1752,9 @@ export default function RunViewerPage() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       {/* Baseline */}
                       <div className="space-y-2">
-                        <p className="text-sm font-medium text-center">Baseline</p>
+                        <p className="text-sm font-medium text-center">
+                          Baseline
+                        </p>
                         {selectedComparison.baselineScreenshot && (
                           <div className="bg-gray-50 rounded-lg overflow-hidden border">
                             <img
@@ -982,7 +1768,9 @@ export default function RunViewerPage() {
 
                       {/* Current */}
                       <div className="space-y-2">
-                        <p className="text-sm font-medium text-center">Current</p>
+                        <p className="text-sm font-medium text-center">
+                          Current
+                        </p>
                         {selectedComparison.currentScreenshot && (
                           <div className="bg-gray-50 rounded-lg overflow-hidden border">
                             <img
@@ -999,10 +1787,18 @@ export default function RunViewerPage() {
                         <p className="text-sm font-medium text-center">
                           Diff
                           {selectedComparison.result && (
-                            <span className={`ml-2 text-xs ${
-                              selectedComparison.result.matched ? "text-green-600" : "text-red-600"
-                            }`}>
-                              ({selectedComparison.result.diffPercentage.toFixed(2)}%)
+                            <span
+                              className={`ml-2 text-xs ${
+                                selectedComparison.result.matched
+                                  ? "text-green-600"
+                                  : "text-red-600"
+                              }`}
+                            >
+                              (
+                              {selectedComparison.result.diffPercentage.toFixed(
+                                2,
+                              )}
+                              %)
                             </span>
                           )}
                         </p>
@@ -1032,19 +1828,31 @@ export default function RunViewerPage() {
                         <div className="grid grid-cols-3 gap-4">
                           <div>
                             <p className="text-muted-foreground">Status</p>
-                            <p className={`font-medium ${
-                              selectedComparison.result.matched ? "text-green-600" : "text-red-600"
-                            }`}>
-                              {selectedComparison.result.matched ? "Matched" : "Different"}
+                            <p
+                              className={`font-medium ${
+                                selectedComparison.result.matched
+                                  ? "text-green-600"
+                                  : "text-red-600"
+                              }`}
+                            >
+                              {selectedComparison.result.matched
+                                ? "Matched"
+                                : "Different"}
                             </p>
                           </div>
                           <div>
                             <p className="text-muted-foreground">Diff Pixels</p>
-                            <p className="font-medium">{selectedComparison.result.diffPixels.toLocaleString()}</p>
+                            <p className="font-medium">
+                              {selectedComparison.result.diffPixels.toLocaleString()}
+                            </p>
                           </div>
                           <div>
-                            <p className="text-muted-foreground">Total Pixels</p>
-                            <p className="font-medium">{selectedComparison.result.totalPixels.toLocaleString()}</p>
+                            <p className="text-muted-foreground">
+                              Total Pixels
+                            </p>
+                            <p className="font-medium">
+                              {selectedComparison.result.totalPixels.toLocaleString()}
+                            </p>
                           </div>
                         </div>
                       </div>
@@ -1055,7 +1863,533 @@ export default function RunViewerPage() {
             </Card>
           </div>
         </TabsContent>
+        {/* Accessibility Tab */}
+        <TabsContent value="accessibility">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Accessibility className="h-5 w-5" />
+                Accessibility Report
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {a11yLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : a11yData ? (
+                <div className="space-y-6">
+                  <div className="flex items-center gap-6">
+                    <div
+                      className={`text-5xl font-display font-bold ${
+                        a11yData.score > 80
+                          ? "text-green-600"
+                          : a11yData.score > 50
+                            ? "text-yellow-600"
+                            : "text-red-600"
+                      }`}
+                    >
+                      {a11yData.score}
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold uppercase tracking-wider text-muted-foreground/60">
+                        Accessibility Score
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {a11yData.score > 80
+                          ? "Good compliance"
+                          : a11yData.score > 50
+                            ? "Needs improvement"
+                            : "Significant issues found"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-4">
+                    {(
+                      ["critical", "serious", "moderate", "minor"] as const
+                    ).map((impact) => (
+                      <Card key={impact} className="p-4">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">
+                          {impact}
+                        </p>
+                        <p
+                          className={`text-2xl font-bold ${
+                            impact === "critical"
+                              ? "text-red-600"
+                              : impact === "serious"
+                                ? "text-orange-600"
+                                : impact === "moderate"
+                                  ? "text-yellow-600"
+                                  : "text-blue-600"
+                          }`}
+                        >
+                          {a11yData.summary[impact] || 0}
+                        </p>
+                      </Card>
+                    ))}
+                  </div>
+
+                  {a11yData.violations.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-sm font-bold text-muted-foreground">
+                        Violations ({a11yData.violations.length})
+                      </p>
+                      <div className="rounded-xl border border-border/40 overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead className="bg-muted/50">
+                            <tr>
+                              <th className="text-left p-3 font-bold text-xs uppercase tracking-wider">
+                                Rule
+                              </th>
+                              <th className="text-left p-3 font-bold text-xs uppercase tracking-wider">
+                                Impact
+                              </th>
+                              <th className="text-left p-3 font-bold text-xs uppercase tracking-wider">
+                                WCAG
+                              </th>
+                              <th className="text-left p-3 font-bold text-xs uppercase tracking-wider">
+                                Target
+                              </th>
+                              <th className="text-left p-3 font-bold text-xs uppercase tracking-wider">
+                                Description
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {a11yData.violations.map((v: any, i: number) => (
+                              <tr key={i} className="border-t border-border/30">
+                                <td className="p-3 font-mono text-xs">
+                                  {v.ruleId || v.id}
+                                </td>
+                                <td className="p-3">
+                                  <Badge
+                                    variant="outline"
+                                    className={`text-[10px] ${
+                                      v.impact === "critical"
+                                        ? "border-red-500 text-red-600"
+                                        : v.impact === "serious"
+                                          ? "border-orange-500 text-orange-600"
+                                          : v.impact === "moderate"
+                                            ? "border-yellow-500 text-yellow-600"
+                                            : "border-blue-500 text-blue-600"
+                                    }`}
+                                  >
+                                    {v.impact}
+                                  </Badge>
+                                </td>
+                                <td className="p-3 text-xs">
+                                  {v.wcagCriteria || v.tags?.join(", ") || "-"}
+                                </td>
+                                <td className="p-3 font-mono text-xs max-w-[200px] truncate">
+                                  {v.target || v.nodes?.[0]?.target?.[0] || "-"}
+                                </td>
+                                <td className="p-3 text-xs max-w-[300px] truncate">
+                                  {v.description || v.help}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-center text-muted-foreground py-8">
+                  No accessibility data available for this run
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Performance Tab */}
+        <TabsContent value="performance">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BarChart3 className="h-5 w-5" />
+                Performance Metrics
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {perfLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : perfData && perfData.metrics.length > 0 ? (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                    {(Array.isArray(perfData.metrics)
+                      ? perfData.metrics
+                      : []
+                    ).map((m: any, i: number) => (
+                      <Card
+                        key={i}
+                        className={`p-4 ${m.overBudget ? "border-red-500/50 bg-red-500/5" : ""}`}
+                      >
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">
+                          {m.name}
+                        </p>
+                        <p
+                          className={`text-2xl font-bold ${m.overBudget ? "text-red-600" : "text-foreground"}`}
+                        >
+                          {m.name === "CLS"
+                            ? m.value?.toFixed(3)
+                            : `${Math.round(m.value || 0)}${m.unit || "ms"}`}
+                        </p>
+                        {m.budgetMax != null && (
+                          <p
+                            className={`text-[10px] font-bold ${m.overBudget ? "text-red-500" : "text-green-500"}`}
+                          >
+                            Budget:{" "}
+                            {m.name === "CLS"
+                              ? m.budgetMax?.toFixed(2)
+                              : `${m.budgetMax}${m.unit || "ms"}`}
+                            {m.overBudget && " — EXCEEDED"}
+                          </p>
+                        )}
+                      </Card>
+                    ))}
+                  </div>
+
+                  {perfData.networkTimings.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-sm font-bold text-muted-foreground">
+                        Network Timing Breakdown
+                      </p>
+                      <div className="grid grid-cols-5 gap-4">
+                        {perfData.networkTimings.map((t: any, i: number) => (
+                          <Card key={i} className="p-4">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">
+                              {t.name}
+                            </p>
+                            <p className="text-lg font-bold">
+                              {Math.round(t.value)}ms
+                            </p>
+                          </Card>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-center text-muted-foreground py-8">
+                  No performance data available for this run
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Security Tab */}
+        <TabsContent value="security">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5" />
+                Security Report
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {secLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : secData ? (
+                <div className="space-y-6">
+                  <div className="flex items-center gap-6">
+                    <div
+                      className={`text-5xl font-display font-bold ${
+                        secData.grade === "A"
+                          ? "text-green-600"
+                          : secData.grade === "B"
+                            ? "text-lime-600"
+                            : secData.grade === "C"
+                              ? "text-yellow-600"
+                              : secData.grade === "D"
+                                ? "text-orange-600"
+                                : "text-red-600"
+                      }`}
+                    >
+                      {secData.grade}
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold uppercase tracking-wider text-muted-foreground/60">
+                        Security Grade
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {secData.findings.length} findings total
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-5 gap-4">
+                    {(
+                      ["critical", "high", "medium", "low", "info"] as const
+                    ).map((sev) => (
+                      <Card key={sev} className="p-4">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">
+                          {sev}
+                        </p>
+                        <p
+                          className={`text-2xl font-bold ${
+                            sev === "critical"
+                              ? "text-red-600"
+                              : sev === "high"
+                                ? "text-orange-600"
+                                : sev === "medium"
+                                  ? "text-yellow-600"
+                                  : sev === "low"
+                                    ? "text-blue-600"
+                                    : "text-gray-500"
+                          }`}
+                        >
+                          {secData.summary[sev] || 0}
+                        </p>
+                      </Card>
+                    ))}
+                  </div>
+
+                  {secData.findings.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-sm font-bold text-muted-foreground">
+                        Findings ({secData.findings.length})
+                      </p>
+                      <div className="rounded-xl border border-border/40 overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead className="bg-muted/50">
+                            <tr>
+                              <th className="text-left p-3 font-bold text-xs uppercase tracking-wider">
+                                Severity
+                              </th>
+                              <th className="text-left p-3 font-bold text-xs uppercase tracking-wider">
+                                Type
+                              </th>
+                              <th className="text-left p-3 font-bold text-xs uppercase tracking-wider">
+                                Title
+                              </th>
+                              <th className="text-left p-3 font-bold text-xs uppercase tracking-wider">
+                                Remediation
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {secData.findings.map((f: any, i: number) => (
+                              <tr key={i} className="border-t border-border/30">
+                                <td className="p-3">
+                                  <Badge
+                                    variant="outline"
+                                    className={`text-[10px] ${
+                                      f.severity === "critical"
+                                        ? "border-red-500 text-red-600"
+                                        : f.severity === "high"
+                                          ? "border-orange-500 text-orange-600"
+                                          : f.severity === "medium"
+                                            ? "border-yellow-500 text-yellow-600"
+                                            : "border-blue-500 text-blue-600"
+                                    }`}
+                                  >
+                                    {f.severity}
+                                  </Badge>
+                                </td>
+                                <td className="p-3 text-xs font-mono">
+                                  {f.type}
+                                </td>
+                                <td className="p-3 text-xs font-medium">
+                                  {f.title}
+                                </td>
+                                <td className="p-3 text-xs max-w-[300px] truncate">
+                                  {f.remediation || "-"}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-center text-muted-foreground py-8">
+                  No security data available for this run
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
+
+      {/* Action buttons for failed runs */}
+      {run && (run.status === "FAILED" || run.status === "ERROR") && (
+        <div className="flex items-center gap-3 mt-6">
+          <Dialog
+            open={correlateDialogOpen}
+            onOpenChange={setCorrelateDialogOpen}
+          >
+            <DialogTrigger asChild>
+              <Button variant="outline" className="rounded-xl">
+                <GitBranch className="mr-2 h-4 w-4" />
+                Correlate with Code
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl rounded-[2rem] border-border/40 bg-card/95 backdrop-blur-xl">
+              <DialogHeader>
+                <DialogTitle>Correlate Failure with Code Changes</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 mt-4">
+                <div className="space-y-2">
+                  <Label>Git Diff</Label>
+                  <Textarea
+                    value={correlateInput}
+                    onChange={(e) => setCorrelateInput(e.target.value)}
+                    placeholder="Paste your git diff here..."
+                    rows={10}
+                    className="font-mono text-xs"
+                  />
+                </div>
+                <Button
+                  onClick={handleCorrelate}
+                  disabled={correlating || !correlateInput.trim()}
+                >
+                  {correlating ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Zap className="mr-2 h-4 w-4" />
+                  )}
+                  Analyze
+                </Button>
+                {correlateResult && (
+                  <Card className="p-4 mt-4">
+                    <p className="text-sm font-bold mb-2">Probable Cause</p>
+                    <p className="text-sm">
+                      {correlateResult.analysis ||
+                        correlateResult.probableCause ||
+                        JSON.stringify(correlateResult)}
+                    </p>
+                    {correlateResult.file && (
+                      <p className="text-xs font-mono mt-2 text-muted-foreground">
+                        {correlateResult.file}:{correlateResult.line}{" "}
+                        (confidence: {correlateResult.confidence || "N/A"})
+                      </p>
+                    )}
+                  </Card>
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="rounded-xl">
+                <UserPlus className="mr-2 h-4 w-4" />
+                Assign
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="rounded-[2rem] border-border/40 bg-card/95 backdrop-blur-xl">
+              <DialogHeader>
+                <DialogTitle>Assign Failure</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 mt-4">
+                <div className="space-y-2">
+                  <Label>Assignee</Label>
+                  <Input
+                    value={assignee}
+                    onChange={(e) => setAssignee(e.target.value)}
+                    placeholder="Team member name or email"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Note</Label>
+                  <Textarea
+                    value={assignNote}
+                    onChange={(e) => setAssignNote(e.target.value)}
+                    placeholder="Add context about the failure..."
+                    rows={3}
+                  />
+                </div>
+                <Button
+                  onClick={handleAssign}
+                  disabled={assigning || !assignee.trim()}
+                >
+                  {assigning ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : null}
+                  Assign
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+      )}
+
+      {/* Comments Section */}
+      <Card className="mt-6">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <MessageSquare className="h-5 w-5" />
+            Comments
+          </CardTitle>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={loadComments}
+            className="rounded-xl"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {comments.length > 0 ? (
+            <div className="space-y-3">
+              {comments.map((c: any) => (
+                <div
+                  key={c.id}
+                  className="p-3 rounded-xl border border-border/40 bg-background/50"
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-bold">
+                      {c.user?.name || c.user?.email || "Unknown"}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {new Date(c.createdAt).toLocaleString()}
+                    </span>
+                  </div>
+                  <p className="text-sm">{c.content}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              No comments yet
+            </p>
+          )}
+          <div className="flex gap-2">
+            <Input
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+              placeholder="Add a comment..."
+              className="rounded-xl"
+              onKeyDown={(e) =>
+                e.key === "Enter" && !e.shiftKey && handlePostComment()
+              }
+            />
+            <Button
+              onClick={handlePostComment}
+              disabled={postingComment || !newComment.trim()}
+              size="icon"
+              className="rounded-xl shrink-0"
+            >
+              {postingComment ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </DashboardShell>
   );
 }

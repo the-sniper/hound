@@ -9,6 +9,8 @@ const createRunSchema = z.object({
   projectId: z.string(),
   baseUrl: z.string().optional(),
   environmentId: z.string().optional(),
+  recordVideo: z.boolean().optional().default(false),
+  recordHar: z.boolean().optional().default(false),
 });
 
 export async function GET(request: NextRequest) {
@@ -88,6 +90,7 @@ export async function POST(request: Request) {
         baseUrl,
         environmentId: data.environmentId,
         userId: session.user.id,
+        recordVideo: data.recordVideo,
       },
     });
 
@@ -98,6 +101,8 @@ export async function POST(request: Request) {
       baseUrl,
       projectId: data.projectId,
       environmentId: data.environmentId,
+      recordVideo: data.recordVideo,
+      recordHar: data.recordHar,
     }).catch((err) => {
       console.error("Test execution error:", err);
       db.testRun

@@ -1,5 +1,10 @@
 export type RunStatus = "PENDING" | "RUNNING" | "PASSED" | "FAILED" | "ERROR";
-export type StepResultStatus = "PENDING" | "RUNNING" | "PASSED" | "FAILED" | "SKIPPED";
+export type StepResultStatus =
+  | "PENDING"
+  | "RUNNING"
+  | "PASSED"
+  | "FAILED"
+  | "SKIPPED";
 
 export interface RunWithResults {
   id: string;
@@ -25,12 +30,15 @@ export interface RunWithResults {
     error: string | null;
     logs: unknown;
     aiResponse: unknown;
+    cacheHit: boolean;
+    retryCount: number;
     stepId: string;
     step: {
       id: string;
       orderIndex: number;
       type: string;
       description: string;
+      maxRetries: number;
     };
   }[];
 }
@@ -40,6 +48,7 @@ export interface RunEvent {
     | "step_start"
     | "step_complete"
     | "step_error"
+    | "step_retry"
     | "run_complete"
     | "run_error"
     | "screenshot";
@@ -49,5 +58,7 @@ export interface RunEvent {
   error?: string;
   screenshotUrl?: string;
   duration?: number;
+  retryCount?: number;
+  cacheHit?: boolean;
   timestamp: number;
 }

@@ -1,7 +1,8 @@
-import type { Page } from "playwright";
+import type { Page, BrowserContext } from "playwright";
 import type { StepConfig } from "@/types/test";
 import { findElement } from "@/lib/ai/locator-agent";
 import { checkAssertion } from "@/lib/ai/assertion-agent";
+import { db } from "@/lib/db";
 import type { AIAgentContext } from "@/types/ai";
 
 async function getAIContext(page: Page, anthropicKey?: string | null, openaiKey?: string | null): Promise<AIAgentContext> {
@@ -44,20 +45,72 @@ async function getAIContext(page: Page, anthropicKey?: string | null, openaiKey?
   };
 }
 
-async function resolveSelector(page: Page, target: string, anthropicKey?: string | null, openaiKey?: string | null): Promise<string> {
-  const context = await getAIContext(page, anthropicKey, openaiKey);
-  const result = await findElement(target, context);
+interface StepContext {
+  stepCache?: Map<string, string>;
+  anthropicKey?: string | null;
+  openaiKey?: string | null;
+  projectId?: string;
+  branch?: string | null;
+  stepId?: string;
+  runId?: string;
+  onCacheHit?: (target: string) => void;
+  onCacheMiss?: (target: string) => void;
+}
+
+async function resolveSelector(
+  page: Page,
+  target: string,
+  stepType: string,
+  ctx?: StepContext
+): Promise<string> {
+  if (ctx?.stepCache?.has(target)) {
+    ctx?.onCacheHit?.(target);
+    return ctx.stepCache.get(target)!;
+  }
+
+  if (ctx?.projectId) {
+    const { getCachedSelector, generateCacheKey } = await import(
+      "./step-cache"
+    );
+    const cacheKey = generateCacheKey(stepType, target);
+    const cached = await getCachedSelector(ctx.projectId, cacheKey, ctx.branch);
+    if (cached) {
+      ctx?.stepCache?.set(target, cached.selector);
+      ctx?.onCacheHit?.(target);
+      return cached.selector;
+    }
+  }
+
+  const aiContext = await getAIContext(page, ctx?.anthropicKey, ctx?.openaiKey);
+  const result = await findElement(target, aiContext);
+
+  ctx?.stepCache?.set(target, result.selector);
+  if (ctx?.projectId && ctx?.stepId) {
+    const { setCachedSelector, generateCacheKey } = await import(
+      "./step-cache"
+    );
+    const cacheKey = generateCacheKey(stepType, target);
+    try {
+      await setCachedSelector(
+        ctx.projectId,
+        ctx.stepId,
+        cacheKey,
+        result.selector,
+        ctx.branch
+      );
+    } catch {
+      // Cache write is best-effort
+    }
+  }
+  ctx?.onCacheMiss?.(target);
+
   return result.selector;
 }
 
 export type StepHandler = (
   page: Page,
   config: StepConfig,
-  context?: { 
-    stepCache?: Map<string, string>;
-    anthropicKey?: string | null;
-    openaiKey?: string | null;
-  }
+  context?: StepContext
 ) => Promise<{ logs?: string[]; aiResponse?: unknown }>;
 
 export const stepHandlers: Record<string, StepHandler> = {
@@ -73,13 +126,8 @@ export const stepHandlers: Record<string, StepHandler> = {
   CLICK: async (page, config, ctx) => {
     if (!config.target) throw new Error("Target is required for click step");
 
-    let selector = ctx?.stepCache?.get(config.target);
-    if (!selector) {
-      selector = await resolveSelector(page, config.target, ctx?.anthropicKey, ctx?.openaiKey);
-      ctx?.stepCache?.set(config.target, selector);
-    }
+    const selector = await resolveSelector(page, config.target, "CLICK", ctx);
 
-    // Try the AI-generated selector first
     try {
       await page.locator(selector).click({ timeout: 5000 });
       return {};
@@ -133,11 +181,7 @@ export const stepHandlers: Record<string, StepHandler> = {
     if (config.value === undefined)
       throw new Error("Value is required for type step");
 
-    let selector = ctx?.stepCache?.get(config.target);
-    if (!selector) {
-      selector = await resolveSelector(page, config.target, ctx?.anthropicKey, ctx?.openaiKey);
-      ctx?.stepCache?.set(config.target, selector);
-    }
+    const selector = await resolveSelector(page, config.target, "TYPE", ctx);
 
     await page.locator(selector).fill(config.value, { timeout: 10000 });
     return {};
@@ -169,11 +213,12 @@ export const stepHandlers: Record<string, StepHandler> = {
   ASSERT_ELEMENT: async (page, config, ctx) => {
     if (!config.target) throw new Error("Target is required");
 
-    let selector = ctx?.stepCache?.get(config.target);
-    if (!selector) {
-      selector = await resolveSelector(page, config.target, ctx?.anthropicKey, ctx?.openaiKey);
-      ctx?.stepCache?.set(config.target, selector);
-    }
+    const selector = await resolveSelector(
+      page,
+      config.target,
+      "ASSERT_ELEMENT",
+      ctx
+    );
 
     const element = page.locator(selector);
     const count = await element.count();
@@ -203,12 +248,14 @@ export const stepHandlers: Record<string, StepHandler> = {
 
   AI_ACTION: async (page, config, ctx) => {
     if (!config.target) throw new Error("Action description is required");
-    const context = await getAIContext(page, ctx?.anthropicKey, ctx?.openaiKey);
-    const locResult = await findElement(config.target, context);
-
-    ctx?.stepCache?.set(config.target, locResult.selector);
-    await page.locator(locResult.selector).click({ timeout: 10000 });
-    return { aiResponse: locResult };
+    const selector = await resolveSelector(
+      page,
+      config.target,
+      "AI_ACTION",
+      ctx
+    );
+    await page.locator(selector).click({ timeout: 10000 });
+    return { aiResponse: { selector } };
   },
 
   JAVASCRIPT: async (page, config) => {
@@ -224,11 +271,7 @@ export const stepHandlers: Record<string, StepHandler> = {
   HOVER: async (page, config, ctx) => {
     if (!config.target) throw new Error("Target is required for hover step");
 
-    let selector = ctx?.stepCache?.get(config.target);
-    if (!selector) {
-      selector = await resolveSelector(page, config.target, ctx?.anthropicKey, ctx?.openaiKey);
-      ctx?.stepCache?.set(config.target, selector);
-    }
+    const selector = await resolveSelector(page, config.target, "HOVER", ctx);
 
     await page.locator(selector).hover({ timeout: 10000 });
     return {};
@@ -238,11 +281,12 @@ export const stepHandlers: Record<string, StepHandler> = {
     if (!config.target) throw new Error("Target is required for select step");
     if (!config.optionValue) throw new Error("Option value is required");
 
-    let selector = ctx?.stepCache?.get(config.target);
-    if (!selector) {
-      selector = await resolveSelector(page, config.target, ctx?.anthropicKey, ctx?.openaiKey);
-      ctx?.stepCache?.set(config.target, selector);
-    }
+    const selector = await resolveSelector(
+      page,
+      config.target,
+      "SELECT",
+      ctx
+    );
 
     await page.locator(selector).selectOption(config.optionValue, {
       timeout: 10000,
@@ -265,5 +309,225 @@ export const stepHandlers: Record<string, StepHandler> = {
       direction === "up" ? -amount : direction === "down" ? amount : 0;
     await page.mouse.wheel(deltaX, deltaY);
     return {};
+  },
+
+  SAVE_AUTH: async (page, config, ctx) => {
+    const name = config.authStateName;
+    if (!name) throw new Error("Auth state name is required");
+    if (!ctx?.projectId) throw new Error("Project ID is required for auth state");
+
+    const context = page.context() as BrowserContext;
+    const storageState = await context.storageState();
+
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 24);
+
+    await db.authState.upsert({
+      where: { projectId_name: { projectId: ctx.projectId, name } },
+      update: { stateData: JSON.parse(JSON.stringify(storageState)), expiresAt },
+      create: { name, stateData: JSON.parse(JSON.stringify(storageState)), projectId: ctx.projectId, expiresAt },
+    });
+
+    return { logs: [`Auth state "${name}" saved`] };
+  },
+
+  LOAD_AUTH: async (page, config, ctx) => {
+    const name = config.authStateName;
+    if (!name) throw new Error("Auth state name is required");
+    if (!ctx?.projectId) throw new Error("Project ID is required for auth state");
+
+    const authState = await db.authState.findFirst({
+      where: { projectId: ctx.projectId, name, expiresAt: { gt: new Date() } },
+    });
+
+    if (!authState) throw new Error(`Auth state "${name}" not found or expired`);
+
+    const stateData = authState.stateData as Record<string, unknown>;
+    const cookies = stateData.cookies as Array<Record<string, unknown>> | undefined;
+    if (cookies?.length) {
+      const context = page.context() as BrowserContext;
+      await context.addCookies(cookies as unknown as Parameters<BrowserContext["addCookies"]>[0]);
+    }
+
+    const origins = stateData.origins as Array<{ origin: string; localStorage: Array<{ name: string; value: string }> }> | undefined;
+    if (origins?.length) {
+      for (const origin of origins) {
+        if (origin.localStorage?.length) {
+          await page.evaluate((items) => {
+            for (const item of items) {
+              localStorage.setItem(item.name, item.value);
+            }
+          }, origin.localStorage);
+        }
+      }
+    }
+
+    return { logs: [`Auth state "${name}" loaded`] };
+  },
+
+  MOCK_ROUTE: async (page, config) => {
+    const pattern = config.mockUrlPattern;
+    if (!pattern) throw new Error("URL pattern is required for mock route");
+
+    const statusCode = config.mockStatusCode ?? 200;
+    const body = config.mockResponseBody ?? "";
+    const headers = config.mockHeaders ?? {};
+
+    await page.route(pattern, (route) => {
+      if (config.mockMethod && route.request().method() !== config.mockMethod.toUpperCase()) {
+        return route.fallback();
+      }
+      return route.fulfill({
+        status: statusCode,
+        contentType: headers["content-type"] || "application/json",
+        headers,
+        body,
+      });
+    });
+
+    return { logs: [`Route mocked: ${pattern} → ${statusCode}`] };
+  },
+
+  REMOVE_MOCK: async (page, config) => {
+    const pattern = config.mockUrlPattern;
+    if (!pattern) throw new Error("URL pattern is required to remove mock");
+
+    await page.unroute(pattern);
+    return { logs: [`Mock removed: ${pattern}`] };
+  },
+
+  CONDITIONAL: async (page, config) => {
+    const conditionType = config.conditionType;
+    const conditionValue = config.conditionValue ?? "";
+    let conditionMet = false;
+
+    switch (conditionType) {
+      case "element_exists": {
+        const target = config.condition ?? "";
+        const count = await page.locator(target).count();
+        conditionMet = count > 0;
+        break;
+      }
+      case "text_contains": {
+        const bodyText = (await page.textContent("body")) ?? "";
+        conditionMet = bodyText.includes(conditionValue);
+        break;
+      }
+      case "url_matches": {
+        const currentUrl = page.url();
+        conditionMet = new RegExp(conditionValue).test(currentUrl);
+        break;
+      }
+      case "variable_equals": {
+        const varName = config.condition ?? "";
+        const envValue = process.env[varName] ?? "";
+        conditionMet = envValue === conditionValue;
+        break;
+      }
+      default:
+        throw new Error(`Unknown condition type: ${conditionType}`);
+    }
+
+    return {
+      logs: [`Condition "${conditionType}" evaluated to ${conditionMet}`],
+      aiResponse: { conditionMet, thenSteps: config.thenSteps, elseSteps: config.elseSteps },
+    };
+  },
+
+  SKIP_IF: async (page, config) => {
+    const conditionType = config.skipConditionType;
+    const conditionValue = config.skipConditionValue ?? "";
+    let shouldSkip = false;
+
+    switch (conditionType) {
+      case "element_exists": {
+        const target = config.skipCondition ?? "";
+        const count = await page.locator(target).count();
+        shouldSkip = count > 0;
+        break;
+      }
+      case "text_contains": {
+        const bodyText = (await page.textContent("body")) ?? "";
+        shouldSkip = bodyText.includes(conditionValue);
+        break;
+      }
+      case "url_matches": {
+        const currentUrl = page.url();
+        shouldSkip = new RegExp(conditionValue).test(currentUrl);
+        break;
+      }
+      case "variable_equals": {
+        const varName = config.skipCondition ?? "";
+        const envValue = process.env[varName] ?? "";
+        shouldSkip = envValue === conditionValue;
+        break;
+      }
+      default:
+        throw new Error(`Unknown condition type: ${conditionType}`);
+    }
+
+    if (shouldSkip) {
+      return {
+        logs: [`Step skipped: condition "${conditionType}" was true`],
+        aiResponse: { skipped: true },
+      };
+    }
+
+    return { logs: [`Step not skipped: condition "${conditionType}" was false`] };
+  },
+
+  ASSERT_ACCESSIBLE: async (page, config, ctx) => {
+    const { runAccessibilityAudit, saveAccessibilityResults } = await import("./accessibility");
+
+    const wcagLevel = config.wcagLevel ?? "AA";
+    const failOnA11y = config.failOnA11y !== false;
+    const impactThreshold = config.a11yImpactThreshold ?? "serious";
+
+    const audit = await runAccessibilityAudit(page, wcagLevel);
+
+    if (ctx?.runId && ctx?.stepId) {
+      await saveAccessibilityResults(ctx.runId, ctx.stepId, audit);
+    }
+
+    const impactLevels = ["minor", "moderate", "serious", "critical"];
+    const thresholdIndex = impactLevels.indexOf(impactThreshold);
+    const criticalViolations = audit.violations.filter(
+      (v) => impactLevels.indexOf(v.impact) >= thresholdIndex
+    );
+
+    if (failOnA11y && criticalViolations.length > 0) {
+      const topIds = criticalViolations.slice(0, 3).map((v) => v.ruleId).join(", ");
+      throw new Error(
+        `Accessibility: ${criticalViolations.length} ${impactThreshold}+ violations found. Score: ${audit.score}/100. Top: ${topIds}`
+      );
+    }
+
+    return {
+      logs: [`A11y audit: score ${audit.score}/100, ${audit.violationCount} violations, ${audit.passCount} passes`],
+    };
+  },
+
+  SECURITY_SCAN: async (page, config, ctx) => {
+    const { runSecurityScan, saveSecurityFindings, calculateSecurityGrade } =
+      await import("./security");
+
+    const scanTypes = config.scanTypes as string[] | undefined;
+    const findings = await runSecurityScan(page, scanTypes);
+
+    if (ctx?.runId && ctx?.projectId) {
+      await saveSecurityFindings(ctx.runId, ctx.projectId, findings);
+    }
+
+    const grade = calculateSecurityGrade(findings);
+
+    if (findings.some((f) => f.severity === "critical")) {
+      throw new Error(
+        `Security scan: Grade ${grade}. ${findings.length} findings including critical issues.`
+      );
+    }
+
+    return {
+      logs: [`Security scan: Grade ${grade}, ${findings.length} findings`],
+    };
   },
 };

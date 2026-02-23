@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { z } from "zod/v4";
-import { RunStatus } from "@prisma/client";
+import { RunStatus } from "@/generated/prisma";
 
 const createTestSchema = z.object({
   name: z.string().min(1),
