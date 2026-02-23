@@ -385,6 +385,14 @@ export default function RunViewerPage() {
     };
   }, [runId]);
 
+  useEffect(() => {
+    if (selectedStep?.step.type === "ASSERT_ACCESSIBLE") {
+      loadAccessibility();
+    } else if (selectedStep?.step.type === "SECURITY_SCAN") {
+      loadSecurity();
+    }
+  }, [selectedStep?.id, selectedStep?.step.type]);
+
   // Poll while the run is still in progress so we catch newly created step results
   useEffect(() => {
     if (!run) return;
@@ -1035,13 +1043,193 @@ export default function RunViewerPage() {
                       </div>
                     )}
                     {selectedStep.error && (
-                      <div>
-                        <p className="text-sm text-muted-foreground mb-1">
-                          Error
-                        </p>
-                        <p className="text-sm text-red-600 bg-red-50 p-3 rounded">
-                          {selectedStep.error}
-                        </p>
+                      <div className="space-y-4">
+                        <div>
+                          <p className="text-sm text-muted-foreground mb-1">
+                            Error
+                          </p>
+                          <div className="text-sm text-red-600 bg-red-50 p-4 rounded-xl border border-red-100 whitespace-pre-wrap">
+                            {selectedStep.error}
+                          </div>
+                        </div>
+
+                        {((selectedStep.step.type === "ASSERT_ACCESSIBLE" &&
+                          a11yData &&
+                          a11yData.violations.filter(
+                            (v: any) => v.stepResultId === selectedStep.id,
+                          ).length > 0) ||
+                          (selectedStep.step.type === "SECURITY_SCAN" &&
+                            secData &&
+                            secData.findings.length > 0)) && (
+                          <div className="pt-2">
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  className="w-full sm:w-auto bg-white hover:bg-gray-50 text-gray-700"
+                                >
+                                  <Eye className="w-4 h-4 mr-2" />
+                                  View Detailed Report
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col p-0 overflow-hidden bg-white border-none shadow-2xl">
+                                <DialogHeader className="px-8 py-6 border-b border-gray-100 shrink-0 bg-white">
+                                  <DialogTitle className="text-2xl font-semibold flex items-center gap-3 text-gray-900">
+                                    {selectedStep.step.type ===
+                                    "ASSERT_ACCESSIBLE" ? (
+                                      <>
+                                        <Accessibility className="w-6 h-6 text-primary" />{" "}
+                                        Accessibility Violations
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Shield className="w-6 h-6 text-primary" />{" "}
+                                        Security Findings
+                                      </>
+                                    )}
+                                  </DialogTitle>
+                                </DialogHeader>
+                                <div className="flex-1 overflow-y-auto px-8 py-6 bg-gray-50/30">
+                                  <div className="space-y-6 pb-8">
+                                    {selectedStep.step.type ===
+                                      "ASSERT_ACCESSIBLE" &&
+                                      a11yData &&
+                                      a11yData.violations
+                                        .filter(
+                                          (v: any) =>
+                                            v.stepResultId === selectedStep.id,
+                                        )
+                                        .map((v: any, index: number) => (
+                                          <div
+                                            key={v.id || index}
+                                            className="group bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all duration-200"
+                                          >
+                                            <div className="flex items-start justify-between gap-4 mb-4">
+                                              <div className="flex flex-wrap items-center gap-3">
+                                                <Badge
+                                                  variant="outline"
+                                                  className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border-none shadow-sm ${
+                                                    v.impact === "critical" ||
+                                                    v.impact === "serious"
+                                                      ? "bg-red-100 text-red-700"
+                                                      : "bg-orange-100 text-orange-700"
+                                                  }`}
+                                                >
+                                                  {v.impact}
+                                                </Badge>
+                                                <span className="text-lg font-bold text-gray-900">
+                                                  {v.ruleId}
+                                                </span>
+                                              </div>
+                                              <Badge
+                                                variant="secondary"
+                                                className="bg-gray-100 text-gray-600 font-mono text-[10px] uppercase px-2 py-1"
+                                              >
+                                                {v.wcagCriteria}
+                                              </Badge>
+                                            </div>
+
+                                            <p className="text-gray-600 mb-6 leading-relaxed text-[15px]">
+                                              {v.description}
+                                            </p>
+
+                                            <div className="space-y-3">
+                                              <div className="flex flex-col gap-1.5">
+                                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-1">
+                                                  Target Element
+                                                </span>
+                                                <div className="bg-gray-50 border border-gray-100 p-4 rounded-xl text-[13px] font-mono text-gray-700 break-all leading-relaxed">
+                                                  {v.target}
+                                                </div>
+                                              </div>
+
+                                              {v.html && (
+                                                <div className="flex flex-col gap-1.5 text-black">
+                                                  <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-1">
+                                                    Source Snippet
+                                                  </span>
+                                                  <div className="bg-gray-900 p-4 rounded-xl text-[12px] font-mono text-gray-300 overflow-x-auto shadow-inner border border-gray-800">
+                                                    {v.html}
+                                                  </div>
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                        ))}
+
+                                    {selectedStep.step.type ===
+                                      "SECURITY_SCAN" &&
+                                      secData &&
+                                      secData.findings.map(
+                                        (f: any, index: number) => (
+                                          <div
+                                            key={f.id || index}
+                                            className="group bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all duration-200"
+                                          >
+                                            <div className="flex items-start justify-between gap-4 mb-4">
+                                              <div className="flex flex-wrap items-center gap-3">
+                                                <Badge
+                                                  variant="outline"
+                                                  className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border-none shadow-sm ${
+                                                    f.severity === "critical" ||
+                                                    f.severity === "high"
+                                                      ? "bg-red-100 text-red-700"
+                                                      : "bg-orange-100 text-orange-700"
+                                                  }`}
+                                                >
+                                                  {f.severity}
+                                                </Badge>
+                                                <span className="text-lg font-bold text-gray-900">
+                                                  {f.title}
+                                                </span>
+                                              </div>
+                                              <Badge
+                                                variant="secondary"
+                                                className="bg-gray-100 text-gray-600 font-mono text-[10px] uppercase px-2 py-1"
+                                              >
+                                                {f.type}
+                                              </Badge>
+                                            </div>
+
+                                            <p className="text-gray-600 mb-6 leading-relaxed text-[15px]">
+                                              {f.description}
+                                            </p>
+
+                                            <div className="space-y-4 text-black">
+                                              {f.location && (
+                                                <div className="flex flex-col gap-1.5">
+                                                  <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-1">
+                                                    Location
+                                                  </span>
+                                                  <div className="bg-gray-50 border border-gray-100 p-4 rounded-xl text-[13px] font-mono text-gray-700 break-all leading-relaxed">
+                                                    {f.location}
+                                                  </div>
+                                                </div>
+                                              )}
+
+                                              {f.remediation && (
+                                                <div className="bg-emerald-50 border border-emerald-100 p-5 rounded-2xl">
+                                                  <div className="flex items-center gap-2 mb-2">
+                                                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                                    <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">
+                                                      Recommended Fix
+                                                    </span>
+                                                  </div>
+                                                  <p className="text-emerald-900 text-[14px] leading-relaxed font-medium">
+                                                    {f.remediation}
+                                                  </p>
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                        ),
+                                      )}
+                                  </div>
+                                </div>
+                              </DialogContent>
+                            </Dialog>
+                          </div>
+                        )}
                       </div>
                     )}
                     <div>

@@ -496,9 +496,9 @@ export const stepHandlers: Record<string, StepHandler> = {
     );
 
     if (failOnA11y && criticalViolations.length > 0) {
+      const topIds = criticalViolations.slice(0, 3).map((v) => v.ruleId).join(", ");
       throw new Error(
-        `Accessibility: ${criticalViolations.length} ${impactThreshold}+ violations found. ` +
-        `Score: ${audit.score}/100. Top: ${criticalViolations.slice(0, 3).map((v) => v.ruleId).join(", ")}`
+        `Accessibility: ${criticalViolations.length} ${impactThreshold}+ violations found. Score: ${audit.score}/100. Top: ${topIds}`
       );
     }
 
