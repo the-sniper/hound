@@ -30,7 +30,7 @@ const VALID_STEP_TYPES = [
  */
 function sanitizeJSON(text: string): string {
   // Strip markdown code fences
-  let result = text
+  const result = text
     .replace(/```(?:json)?\s*/g, "")
     .replace(/```\s*/g, "");
 

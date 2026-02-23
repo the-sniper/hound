@@ -5,6 +5,7 @@ import {
   compareScreenshots,
   generateComparisonSummary,
   isValidBaseline,
+  VisualDiffResult,
 } from "@/lib/engine/visual-diff";
 import { join } from "path";
 
@@ -143,8 +144,8 @@ export async function GET(
 
     // Generate summary (only for successful comparisons)
     const successfulComparisons = comparisonResults
-      .filter((c) => c.result)
-      .map((c) => c.result);
+      .filter((c) => c.result !== null && c.result !== undefined)
+      .map((c) => c.result as VisualDiffResult);
 
     const summary = generateComparisonSummary(
       baselineRunId,

@@ -15,7 +15,7 @@ const updateTestSchema = z.object({
         id: z.string().optional(),
         type: z.string(),
         description: z.string(),
-        config: z.record(z.string(), z.unknown()).default({}),
+        config: z.record(z.string(), z.unknown()).optional(),
         orderIndex: z.number(),
       })
     )
@@ -129,11 +129,8 @@ export async function GET(
   // Calculate health metrics
   const health = calculateHealthMetrics(test.runs);
 
-  // Parse step configs from JSON string to object
-  const stepsWithParsedConfig = test.steps.map((step) => ({
-    ...step,
-    config: step.config ? JSON.parse(step.config) : {},
-  }));
+  // No need to parse config, Prisma already returns it as an object
+  const stepsWithParsedConfig = test.steps;
 
   return NextResponse.json({
     ...test,
@@ -165,7 +162,7 @@ export async function PUT(
           testId,
           type: step.type as never,
           description: step.description,
-          config: JSON.stringify(step.config),
+          config: (step.config ?? {}) as any,
           orderIndex: step.orderIndex ?? index,
         })),
       });
@@ -186,11 +183,8 @@ export async function PUT(
       include: { steps: { orderBy: { orderIndex: "asc" } } },
     });
 
-    // Parse step configs from JSON string to object
-    const stepsWithParsedConfig = test.steps.map((step) => ({
-      ...step,
-      config: step.config ? JSON.parse(step.config) : {},
-    }));
+    // No need to parse config, Prisma already returns it as an object
+    const stepsWithParsedConfig = test.steps;
 
     return NextResponse.json({ ...test, steps: stepsWithParsedConfig });
   } catch (error) {

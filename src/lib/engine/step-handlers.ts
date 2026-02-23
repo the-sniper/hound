@@ -13,20 +13,31 @@ async function getAIContext(page: Page, anthropicKey?: string | null, openaiKey?
   // Also get simplified HTML structure for form elements
   const formElements = await page.evaluate(() => {
     // ... same as before
-    const elements: any[] = [];
+    // Use a specific interface instead of any[]
+    interface ElementInfo {
+      tag: string;
+      type?: string;
+      name?: string;
+      id: string;
+      placeholder?: string;
+      ariaLabel?: string;
+      classes: string;
+      text?: string;
+    }
+    const elements: ElementInfo[] = [];
     const inputs = document.querySelectorAll('input, button, textarea, select, [type="submit"], [role="button"], [role="textbox"], [role="input"]');
     inputs.forEach((el) => {
       const isButton = el.tagName.toLowerCase() === 'button' || el.getAttribute('type') === 'submit' || el.getAttribute('role') === 'button';
       let text = '';
       if (isButton) {
-        text = (el as any).innerText?.trim() || el.getAttribute('value') || el.textContent?.trim() || '';
+        text = (el as HTMLElement).innerText?.trim() || el.getAttribute('value') || el.textContent?.trim() || '';
       }
       elements.push({
         tag: el.tagName.toLowerCase(),
-        type: (el as any).type,
-        name: (el as any).name,
+        type: (el as HTMLInputElement).type,
+        name: (el as HTMLInputElement).name,
         id: el.id,
-        placeholder: (el as any).placeholder,
+        placeholder: (el as HTMLInputElement).placeholder,
         ariaLabel: el.getAttribute('aria-label') || undefined,
         classes: el.className,
         text: text || undefined,

@@ -87,11 +87,8 @@ export async function GET(
     },
   });
 
-  // Parse step configs from JSON string to object
-  const stepsWithParsedConfig = steps.map((step) => ({
-    ...step,
-    config: step.config ? JSON.parse(step.config) : {},
-  }));
+  // No need to parse config, Prisma already returns it as an object
+  const stepsWithParsedConfig = steps;
 
   return NextResponse.json(stepsWithParsedConfig);
 }
@@ -141,7 +138,7 @@ export async function POST(
       data: {
         type: data.type,
         description: data.description,
-        config: JSON.stringify(data.config),
+        config: data.config as any,
         testId,
         orderIndex,
       },
@@ -216,17 +213,14 @@ export async function PUT(
             orderIndex: step.orderIndex,
             type: step.type,
             description: step.description,
-            config: JSON.stringify(step.config),
+            config: step.config as any,
           },
         })
       )
     );
 
-    // Return with parsed configs
-    const stepsWithParsedConfig = updatedSteps.map((step) => ({
-      ...step,
-      config: step.config ? JSON.parse(step.config) : {},
-    }));
+    // No need to parse config, Prisma already returns it as an object
+    const stepsWithParsedConfig = updatedSteps;
 
     return NextResponse.json(stepsWithParsedConfig);
   } catch (error) {

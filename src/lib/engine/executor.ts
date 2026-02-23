@@ -108,7 +108,7 @@ async function executeRecoveryAction(page: Page, recovery: RecoveryAction): Prom
 }
 
 export async function executeTestRun(options: ExecutorOptions): Promise<void> {
-  const { runId, testId, environmentId, baseUrl } = options;
+  const { runId, testId, environmentId } = options;
 
   await db.testRun.update({
     where: { id: runId },
@@ -149,7 +149,7 @@ export async function executeTestRun(options: ExecutorOptions): Promise<void> {
   }
 
   // Substitute variables in baseUrl
-  const substitutedBaseUrl = substituteVariables(baseUrl, variables);
+  // const substitutedBaseUrl = substituteVariables(baseUrl, variables);
 
   // Update run with environment reference
   await db.testRun.update({

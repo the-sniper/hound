@@ -1,5 +1,8 @@
 import type { ArtifactStore } from "./artifact-store";
 
+import { S3Store } from "./s3-store";
+import { LocalStore } from "./local-store";
+
 let store: ArtifactStore | null = null;
 
 export function getArtifactStore(): ArtifactStore {
@@ -8,10 +11,8 @@ export function getArtifactStore(): ArtifactStore {
   const provider = process.env.STORAGE_PROVIDER || "local";
 
   if (provider === "s3") {
-    const { S3Store } = require("./s3-store");
     store = new S3Store();
   } else {
-    const { LocalStore } = require("./local-store");
     store = new LocalStore();
   }
 
